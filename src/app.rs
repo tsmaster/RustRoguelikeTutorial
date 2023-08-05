@@ -24,13 +24,12 @@ impl AppData {
     }
 
     fn handle_input(&mut self, input: chargrid::input::Input) {
-        use chargrid::input::{Input, KeyboardInput};
         match input {
             Input::Keyboard(key) => match key {
-                KeyboardInput::Left => game_state.maybe_move_player(CardinalDirection::West),
-                KeyboardInput::Right => game_state.maybe_move_player(CardinalDirection::East),
-                KeyboardInput::Up => game_state.maybe_move_player(CardinalDirection::North),
-                KeyboardInput::Down => game_state.maybe_move_player(CardinalDirection::South),
+                KeyboardInput::Left => self.game_state.maybe_move_player(CardinalDirection::West),
+                KeyboardInput::Right => self.game_state.maybe_move_player(CardinalDirection::East),
+                KeyboardInput::Up => self.game_state.maybe_move_player(CardinalDirection::North),
+                KeyboardInput::Down => self.game_state.maybe_move_player(CardinalDirection::South),
                 _ => (),
             },
             _ => (),
@@ -58,7 +57,7 @@ impl <'a> View<&'a AppData> for AppView {
         let view_cell = ViewCell::new()
             .with_character('@')
             .with_foreground(Rgb24::new_grey(255));
-        frame.set_cell_relative(data.game_state.player_coord, 0, view_cell, context);
+        frame.set_cell_relative(data.game_state.player_coord(), 0, view_cell, context);
     }
 }
 
@@ -70,7 +69,7 @@ pub struct App {
 }
 
 impl App {
-    fn new(screen_size: Size) -> Self {
+    pub fn new(screen_size: Size) -> Self {
         Self {
             data: AppData::new(screen_size),
             view: AppView::new(),
@@ -78,7 +77,7 @@ impl App {
     }
 }
 
-impl CharGridApp for App {
+impl ChargridApp for App {
     fn on_input (
         &mut self,
         input: chargrid::app::Input,
