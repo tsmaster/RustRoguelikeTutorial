@@ -12,4 +12,4 @@ coord_2d = "0.3"
 direction = "0.18"
 entity_table = "0.2"
 rgb24 = "0.3"
-
+spatial_table = "0.3"
