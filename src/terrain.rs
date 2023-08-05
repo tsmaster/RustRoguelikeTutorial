@@ -12,7 +12,7 @@ pub enum TerrainTile {
 
 pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
     let mut grid = Grid::new_copy(size, None);
-    let mut player_placed = false;
+    let mut room_centers = Vec::new();
 
     const NUM_ATTEMPTS: usize = 100;
     for _ in 0..NUM_ATTEMPTS {
@@ -23,14 +23,36 @@ pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
 
             let room_center = room.center();
 
-            if !player_placed {
+            if room_centers.is_empty() {
                 *grid.get_checked_mut(room_center) = Some(TerrainTile::Player);
-                player_placed = true;
             }
+
+            room_centers.push(room_center);
         }
     }
+
+    for window in room_centers.windows(2) {
+        carve_corridor(window[0], window[1], &mut grid);
+    }
+    
     grid.map(|t| t.unwrap_or(TerrainTile::Wall))
-}    
+}
+
+fn carve_corridor(start: Coord, end: Coord, grid: &mut Grid<Option<TerrainTile>>) {
+    for i in start.x.min(end.x)..=start.x.max(end.x) {
+        let cell = grid.get_checked_mut(Coord { x:i, ..start });
+        if *cell == None || *cell == Some(TerrainTile::Wall) {
+            *cell = Some(TerrainTile::Floor);
+        }
+    }
+
+    for i in start.y.min(end.y)..start.y.max(end.y) {
+        let cell = grid.get_checked_mut(Coord { y:i, ..end });
+        if *cell == None || *cell == Some(TerrainTile::Wall) {
+            *cell = Some(TerrainTile::Floor);
+        }
+    }
+}
 
 
 struct Room {
@@ -64,6 +86,10 @@ impl Room {
         self.coords().all(|coord| grid.get_checked(coord).is_none())
     }
 
+    // Updates `grid`, setting each cell overlapping this room to
+    // `Some(TerrainTile::Floor)`.  The top and left sides of the room
+    // are set to `Some(TerrainTile::Wall)` instead.  This prevents a
+    // pair of rooms being placed immediately adjacent to one another.
     fn carve_out(&self, grid: &mut Grid<Option<TerrainTile>>) {
         for coord in self.coords() {
             let cell = grid.get_checked_mut(coord);
