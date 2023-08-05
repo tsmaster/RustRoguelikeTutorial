@@ -1,6 +1,7 @@
 // app.rs
 
-use crate::game::{GameState, Layer, Tile};
+use crate::game::GameState;
+use crate::world::{Layer, Tile};
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
     input::{keys, Input, KeyboardInput},
