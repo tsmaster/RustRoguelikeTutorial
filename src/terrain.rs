@@ -1,6 +1,7 @@
 // terrain.rs
 
 use grid_2d::{Coord, Grid, Size};
+use rand::Rng;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TerrainTile {
@@ -9,7 +10,9 @@ pub enum TerrainTile {
     Wall,
 }
 
-pub fn generate_dungeon(size: Size) -> Grid<TerrainTile> {
+pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
+    println!("random int: {}", rng.next_u32());
+    
     let mut grid = Grid::new_copy(size, None);
     for coord in Size::new(5, 5).coord_iter_row_major() {
         *grid.get_checked_mut(coord + Coord::new(1, 1)) = Some(TerrainTile::Floor);
