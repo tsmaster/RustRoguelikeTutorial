@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use crate::game::GameState;
 use crate::visibility::CellVisibility;
-use crate::world::{Layer, Tile};
+use crate::world::{Layer, NpcType, Tile};
 
 
 struct AppData {
@@ -143,6 +143,14 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_character('#')
             .with_foreground(Rgb24::new(0, 63, 63))
             .with_background(Rgb24::new(63, 127, 127)),
+        Tile::Npc(NpcType::Orc) => ViewCell::new()
+            .with_character('o')
+            .with_bold(true)
+            .with_foreground(Rgb24::new(0, 187, 0)),
+        Tile::Npc(NpcType::Troll) => ViewCell::new()
+            .with_character('T')
+            .with_bold(true)
+            .with_foreground(Rgb24::new(187, 0, 0)),
     }
 }
 
@@ -160,6 +168,14 @@ fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_character('#')
             .with_foreground(Rgb24::new_grey(63))
             .with_background(Rgb24::new_grey(0)),
+        Tile::Npc(NpcType::Orc) => ViewCell::new()
+            .with_character('o')
+            .with_bold(true)
+            .with_foreground(Rgb24::new_grey(63)),
+        Tile::Npc(NpcType::Troll) => ViewCell::new()
+            .with_character('T')
+            .with_bold(true)
+            .with_foreground(Rgb24::new_grey(63)),        
     }
 }
 

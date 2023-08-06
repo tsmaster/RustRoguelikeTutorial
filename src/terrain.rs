@@ -1,19 +1,26 @@
 // terrain.rs
 
 use grid_2d::{Coord, Grid, Size};
-use rand::Rng;
+use rand::{seq::IteratorRandom, seq::SliceRandom, Rng};
+
+use crate::world::NpcType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TerrainTile {
     Player,
     Floor,
     Wall,
+    Npc(NpcType),
 }
 
 pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
     let mut grid = Grid::new_copy(size, None);
     let mut room_centers = Vec::new();
 
+    const NPCS_PER_ROOM_DISTRIBUTION: &[usize] =
+        &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4];
+
+    // attempt to add a room a constant number of times
     const NUM_ATTEMPTS: usize = 100;
     for _ in 0..NUM_ATTEMPTS {
         let room = Room::choose(size, rng);
@@ -28,6 +35,10 @@ pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
             }
 
             room_centers.push(room_center);
+
+            // add NPCs to the room
+            let &num_npcs = NPCS_PER_ROOM_DISTRIBUTION.choose(rng).unwrap();
+            room.place_npcs(num_npcs, &mut grid, rng);
         }
     }
 
@@ -98,6 +109,21 @@ impl Room {
             } else {
                 *cell = Some(TerrainTile::Floor);
             }
+        }
+    }
+
+    fn place_npcs<R: Rng>(&self, n: usize, grid: &mut Grid<Option<TerrainTile>>, rng: &mut R) {
+        for coord in self
+            .coords()
+            .filter(|&coord| grid.get_checked(coord).unwrap() == TerrainTile::Floor)
+            .choose_multiple(rng, n)
+        {
+            let npc_type = if rng.gen_range(0..100) < 80 {
+                NpcType::Orc
+            } else {
+                NpcType::Troll
+            };
+            *grid.get_checked_mut(coord) = Some(TerrainTile::Npc(npc_type));
         }
     }
 }

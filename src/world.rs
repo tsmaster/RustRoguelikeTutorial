@@ -13,11 +13,13 @@ pub enum Tile {
     Player,
     Floor,
     Wall,
+    Npc(NpcType),
 }
 
 entity_table::declare_entity_module! {
     components {
         tile: Tile,
+        npc_type: NpcType,
     }
 }
 
@@ -119,6 +121,21 @@ impl World {
         self.components.tile.insert(entity, Tile::Floor);
     }
 
+    fn spawn_npc(&mut self, coord: Coord, npc_type: NpcType) -> Entity {
+        let entity = self.entity_allocator.alloc();
+        self.spatial_table
+            .update(
+                entity,
+                Location {
+                    coord,
+                    layer: Some(Layer::Character),
+                },
+            )
+            .unwrap();
+        self.components.tile.insert(entity, Tile::Npc(npc_type));
+        self.components.npc_type.insert(entity, npc_type);
+        entity
+    }
 
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
@@ -134,6 +151,11 @@ impl World {
                 TerrainTile::Wall => {
                     self.spawn_floor(coord);
                     self.spawn_wall(coord);
+                }
+                TerrainTile::Npc(npc_type) => {
+                    let entity = self.spawn_npc(coord, npc_type);
+                    self.spawn_floor(coord);
+                    //ai_state.insert(entity, ());
                 }
             }
         }
@@ -151,7 +173,11 @@ impl World {
         let new_player_coord = player_coord + direction.coord();
         if new_player_coord.is_valid(self.spatial_table.grid_size()) {
             let dest_layers = self.spatial_table.layers_at_checked(new_player_coord);
-            if dest_layers.character.is_none() && dest_layers.feature.is_none() {
+            if let Some(character) = dest_layers.character {
+                if let Some(npc_type) = self.components.npc_type.get(character) {
+                    println!("You harmlessly bump into the {}.", npc_type.name());
+                }
+            } else if dest_layers.feature.is_none() {
                 self.spatial_table
                     .update_coord(character_entity, new_player_coord)
                     .unwrap();
@@ -160,3 +186,21 @@ impl World {
     }
 }    
         
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NpcType {
+    Orc,
+    Troll,
+}
+
+impl NpcType {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Orc => "orc",
+            Self::Troll => "troll",
+        }
+    }
+}
+
+// TODO add more NpcTypes
+
+
