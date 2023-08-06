@@ -7,6 +7,7 @@ use coord_2d::Size;
 mod app;
 mod game;
 mod terrain;
+mod visibility;
 mod world;
 
 fn main() {

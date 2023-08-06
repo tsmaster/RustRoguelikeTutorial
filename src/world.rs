@@ -59,6 +59,23 @@ impl World {
         }
     }
 
+    pub fn size(&self) -> Size {
+        self.spatial_table.grid_size()
+    }
+
+    pub fn opacity_at(&self, coord: Coord) -> u8 {
+        if self
+            .spatial_table
+            .layers_at_checked(coord)
+            .feature
+            .is_some()
+        {
+            255
+        } else {
+            0
+        }
+    }
+
     fn spawn_player(&mut self, coord: Coord) -> Entity {
         let entity = self.entity_allocator.alloc();
         self.spatial_table
