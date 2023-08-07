@@ -6,6 +6,7 @@ use entity_table::{ComponentTable, Entity, EntityAllocator};
 use rand::Rng;
 
 use crate::behavior::Agent;
+use crate::game::LogMessage;
 use crate::terrain::{self, TerrainTile};
 
 
@@ -180,7 +181,12 @@ impl World {
 
     }
 
-    pub fn maybe_move_character(&mut self, character_entity: Entity, direction: CardinalDirection) {
+    pub fn maybe_move_character(
+        &mut self,
+        character_entity: Entity,
+        direction: CardinalDirection,
+        message_log: &mut Vec<LogMessage>,
+    ) {
         let player_coord = self
             .spatial_table
             .coord_of(character_entity)
@@ -189,11 +195,18 @@ impl World {
         if new_player_coord.is_valid(self.spatial_table.grid_size()) {
             let dest_layers = self.spatial_table.layers_at_checked(new_player_coord);
             if let Some(dest_character_entity) = dest_layers.character {
-                let character_is_npc = self.components.npc_type.contains(character_entity);
+                let character_is_npc = self.components.npc_type.get(character_entity).cloned();
                 let dest_character_is_npc =
-                    self.components.npc_type.contains(dest_character_entity);
-                if character_is_npc != dest_character_is_npc {
-                    self.character_bump_attack(dest_character_entity);
+                    self.components.npc_type.get(dest_character_entity).cloned();
+                if character_is_npc.is_some() != dest_character_is_npc.is_some() {
+                    let victim_dies = self.character_bump_attack(dest_character_entity).is_some();
+                    let npc_type = character_is_npc.or(dest_character_is_npc).unwrap();
+                    Self::write_combat_log_messages(
+                        character_is_npc.is_none(),
+                        victim_dies,
+                        npc_type,
+                        message_log,
+                    );
                 }
             } else if dest_layers.feature.is_none() {
                 self.spatial_table
@@ -203,14 +216,16 @@ impl World {
         }
     }
 
-    fn character_bump_attack(&mut self, victim: Entity) {
+    fn character_bump_attack(&mut self, victim: Entity) -> Option<VictimDies> {
         const DAMAGE: u32 = 1;
         if let Some(hit_points) = self.components.hit_points.get_mut(victim) {
             hit_points.current = hit_points.current.saturating_sub(DAMAGE);
             if hit_points.current == 0 {
                 self.character_die(victim);
+                return Some(VictimDies);
             }
         }
+        None
     }
 
 
@@ -282,6 +297,27 @@ impl World {
     pub fn hit_points(&self, entity: Entity) -> Option<HitPoints> {
         self.components.hit_points.get(entity).cloned()
     }
+
+    fn write_combat_log_messages(
+        attacker_is_player: bool,
+        victim_dies: bool,
+        npc_type: NpcType,
+        message_log: &mut Vec<LogMessage>,
+    ) {
+        if attacker_is_player {
+            if victim_dies {
+                message_log.push(LogMessage::PlayerKillsNpc(npc_type));
+            } else {
+                message_log.push(LogMessage::PlayerAttacksNpc(npc_type));
+            }
+        } else {
+            if victim_dies {
+                message_log.push(LogMessage::NpcKillsPlayer(npc_type));
+            } else {
+                message_log.push(LogMessage::NpcAttacksPlayer(npc_type));
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -313,3 +349,5 @@ impl HitPoints {
         Self { current: max, max }
     }
 }
+
+struct VictimDies;

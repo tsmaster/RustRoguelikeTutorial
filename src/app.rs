@@ -16,14 +16,22 @@ use crate::visibility::{CellVisibility, VisibilityAlgorithm};
 use crate::world::{Layer, NpcType, Tile};
 
 
-const UI_NUM_ROWS: u32 = 2;
+const UI_NUM_ROWS: u32 = 5;
 
 
-mod colors {
+pub mod colors {
+    use super::*;
     use rgb24::Rgb24;
     pub const PLAYER: Rgb24 = Rgb24::new_grey(255);
     pub const ORC: Rgb24 = Rgb24::new(0, 187, 0);
     pub const TROLL: Rgb24 = Rgb24::new(187, 0, 0);
+
+    pub fn npc_color(npc_type: NpcType) -> Rgb24 {
+        match npc_type {
+            NpcType::Orc => ORC,
+            NpcType::Troll => TROLL,
+        }
+    }
 }
 
 
@@ -93,8 +101,12 @@ impl <'a> View<&'a AppData> for AppView {
     ) {
         self.game_view.view(&data.game_state, context, frame);
         let player_hit_points = data.game_state.player_hit_points();
+        let messages = data.game_state.message_log();
         self.ui_view.view(
-            UiData { player_hit_points },
+            UiData {
+                player_hit_points,
+                messages,
+            },
             context.add_offset(Coord::new(0, self.ui_y_offset)),
             frame,
         );

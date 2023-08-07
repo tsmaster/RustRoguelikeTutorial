@@ -8,7 +8,7 @@ use rand_isaac::Isaac64Rng;
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{HitPoints, Location, Populate, Tile, World};
+use crate::world::{HitPoints, Location, NpcType, Populate, Tile, World};
 
 
 pub struct EntityToRender {
@@ -24,6 +24,7 @@ pub struct GameState {
     visibility_grid: VisibilityGrid,
     ai_state: ComponentTable<Agent>,
     behavior_context: BehaviorContext,
+    message_log: Vec<LogMessage>,
 }
 
 impl GameState {
@@ -48,6 +49,7 @@ impl GameState {
             visibility_grid,
             ai_state,
             behavior_context,
+            message_log: Vec::new(),
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
@@ -70,7 +72,7 @@ impl GameState {
 
     pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
         self.world
-            .maybe_move_character(self.player_entity, direction);
+            .maybe_move_character(self.player_entity, direction, &mut self.message_log);
         self.ai_turn();
     }
 
@@ -93,9 +95,13 @@ impl GameState {
                 &mut self.behavior_context);
             match npc_action {
                 NpcAction::Wait => (),
-                NpcAction::Move(direction) => self.world.maybe_move_character(entity, direction),
+                NpcAction::Move(direction) => self.world.maybe_move_character(entity, direction, &mut self.message_log),
             }
         }
+    }
+
+    pub fn message_log(&self) -> &[LogMessage] {
+        &self.message_log
     }
 
     pub fn entities_to_render<'a>(&'a self) -> impl 'a + Iterator<Item = EntityToRender> {
@@ -127,3 +133,12 @@ impl GameState {
             .expect("player has no hit points")
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum LogMessage {
+    PlayerAttacksNpc(NpcType),
+    NpcAttacksPlayer(NpcType),
+    PlayerKillsNpc(NpcType),
+    NpcKillsPlayer(NpcType),
+}
+
