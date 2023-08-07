@@ -8,7 +8,7 @@ use rand_isaac::Isaac64Rng;
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{Location, Populate, Tile, World};
+use crate::world::{HitPoints, Location, Populate, Tile, World};
 
 
 pub struct EntityToRender {
@@ -119,5 +119,11 @@ impl GameState {
 
     pub fn is_player_alive(&self) -> bool {
         self.world.is_living_character(self.player_entity)
+    }
+
+    pub fn player_hit_points(&self) -> HitPoints {
+        self.world
+            .hit_points(self.player_entity)
+            .expect("player has no hit points")
     }
 }

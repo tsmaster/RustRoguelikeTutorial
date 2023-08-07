@@ -12,6 +12,7 @@ mod app;
 mod behavior;
 mod game;
 mod terrain;
+mod ui;
 mod visibility;
 mod world;
 
