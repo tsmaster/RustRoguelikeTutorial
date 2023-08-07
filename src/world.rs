@@ -5,6 +5,7 @@ use direction::CardinalDirection;
 use entity_table::{ComponentTable, Entity, EntityAllocator};
 use rand::Rng;
 
+use crate::behavior::Agent;
 use crate::terrain::{self, TerrainTile};
 
 
@@ -46,7 +47,7 @@ pub struct World {
 
 pub struct Populate {
     pub player_entity: Entity,
-    pub ai_state: ComponentTable<()>,
+    pub ai_state: ComponentTable<Agent>,
 }
 
 impl World {
@@ -76,10 +77,6 @@ impl World {
         } else {
             0
         }
-    }
-
-    pub fn npc_type(&self, entity: Entity) -> Option<NpcType> {
-        self.components.npc_type.get(entity).cloned()
     }
 
     fn spawn_player(&mut self, coord: Coord) -> Entity {
@@ -160,7 +157,7 @@ impl World {
                 TerrainTile::Npc(npc_type) => {
                     let entity = self.spawn_npc(coord, npc_type);
                     self.spawn_floor(coord);
-                    ai_state.insert(entity, ());
+                    ai_state.insert(entity, Agent::new());
                 }
             }
         }
@@ -189,6 +186,31 @@ impl World {
                     .unwrap();
             }
         }
+    }
+
+    pub fn can_npc_enter_ignoring_other_npcs(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| layers.feature.is_none())
+            .unwrap_or(false)
+    }
+
+    pub fn can_npc_enter(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| {
+                let contains_npc = layers
+                    .character
+                    .map(|entity| self.components.npc_type.contains(entity))
+                    .unwrap_or(false);
+                let contains_feature = layers.feature.is_some();
+                !(contains_npc || contains_feature)
+            })
+            .unwrap_or(false)
+    }
+
+    pub fn entity_coord(&self, entity: Entity) -> Option<Coord> {
+        self.spatial_table.coord_of(entity)
     }
 }    
         

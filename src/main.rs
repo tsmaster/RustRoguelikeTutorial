@@ -9,6 +9,7 @@ use rand::Rng;
 use crate::visibility::VisibilityAlgorithm;
 
 mod app;
+mod behavior;
 mod game;
 mod terrain;
 mod visibility;

@@ -6,6 +6,7 @@ use entity_table::{ComponentTable, Entity};
 use rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
 
+use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
 use crate::world::{Location, Populate, Tile, World};
 
@@ -21,7 +22,8 @@ pub struct GameState {
     player_entity: Entity,
     shadowcast_context: shadowcast::Context<u8>,
     visibility_grid: VisibilityGrid,
-    ai_state: ComponentTable<()>,
+    ai_state: ComponentTable<Agent>,
+    behavior_context: BehaviorContext,
 }
 
 impl GameState {
@@ -38,12 +40,14 @@ impl GameState {
         } = world.populate(&mut rng);
         let shadowcast_context = shadowcast::Context::default();
         let visibility_grid = VisibilityGrid::new(screen_size);
+        let behavior_context = BehaviorContext::new(screen_size);
         let mut game_state = Self {
             world,
             player_entity,
             shadowcast_context,
             visibility_grid,
             ai_state,
+            behavior_context,
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
@@ -71,9 +75,14 @@ impl GameState {
     }
 
     fn ai_turn(&mut self) {
-        for (entity, ()) in self.ai_state.iter_mut() {
-            let npc_type = self.world.npc_type(entity).unwrap();
-            println!("The {} ponders its existence.", npc_type.name());
+        self.behavior_context
+            .update(self.player_entity, &self.world);
+        for (entity, agent) in self.ai_state.iter_mut() {
+            let npc_action = agent.act(entity, &self.world, &mut self.behavior_context);
+            match npc_action {
+                NpcAction::Wait => (),
+                NpcAction::Move(direction) => self.world.maybe_move_character(entity, direction),
+            }
         }
     }
 
