@@ -38,7 +38,7 @@ impl AppData {
            visibility_algorithm: VisibilityAlgorithm) -> Self {
         let game_area_size = screen_size.set_height(screen_size.height() - UI_NUM_ROWS);
         Self {
-            game_state: GameState::new(screen_size,
+            game_state: GameState::new(game_area_size,
                                        rng_seed,
                                        visibility_algorithm),
             visibility_algorithm,
