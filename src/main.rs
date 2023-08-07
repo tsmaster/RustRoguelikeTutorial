@@ -3,6 +3,10 @@
 use app::App;
 use chargrid_graphical::{Config, Context, Dimensions, FontBytes};
 use coord_2d::Size;
+use meap;
+use rand::Rng;
+
+use crate::visibility::VisibilityAlgorithm;
 
 mod app;
 mod game;
@@ -11,6 +15,13 @@ mod visibility;
 mod world;
 
 fn main() {
+    use meap::Parser;
+    let Args {
+        rng_seed,
+        visibility_algorithm,
+    } = Args::parser().with_help_default().parse_env_or_exit();
+    println!("RNG Seed: {}", rng_seed);
+    
     const CELL_SIZE_PX: f64 = 24.0;
     let context = Context::new(Config {
         font_bytes: FontBytes {
@@ -35,6 +46,29 @@ fn main() {
         resizable: false,
     });
     let screen_size = Size::new(40, 30);
-    let app = App::new(screen_size);
+    let app = App::new(screen_size, rng_seed, visibility_algorithm);
     context.run_app(app);        
 }
+
+struct Args {
+    rng_seed: u64,
+    visibility_algorithm: VisibilityAlgorithm,
+}
+
+impl Args {
+    fn parser() -> impl meap::Parser<Item = Self> {
+        meap::let_map! {
+            let {
+                rng_seed = opt_opt::<u64, _>("INT", "r")
+                    .name("rng-seed")
+                    .desc("seed for random number generator")
+                    .with_default_lazy("randomly chosen seed", || rand::thread_rng().gen());
+                visibility_algorithm = flag("debug-omniscient").some_if(VisibilityAlgorithm::Omniscient)
+                    .with_default_general(VisibilityAlgorithm::Shadowcast);
+            } in {
+                Self { rng_seed, visibility_algorithm }
+            }
+        }
+    }
+}
+

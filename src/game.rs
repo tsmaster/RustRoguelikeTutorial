@@ -6,7 +6,7 @@ use entity_table::{ComponentTable, Entity};
 use rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
 
-use crate::visibility::{CellVisibility, VisibilityGrid};
+use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
 use crate::world::{Location, Populate, Tile, World};
 
 
@@ -25,9 +25,13 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(screen_size: Size) -> Self {
+    pub fn new(
+        screen_size: Size,
+        rng_seed: u64,
+        initial_visibility_algorithm: VisibilityAlgorithm,
+    ) -> Self {
         let mut world = World::new(screen_size);
-        let mut rng = Isaac64Rng::from_entropy();
+        let mut rng = Isaac64Rng::seed_from_u64(rng_seed);
         let Populate {
             player_entity,
             ai_state,
@@ -41,14 +45,23 @@ impl GameState {
             visibility_grid,
             ai_state,
         };
-        game_state.update_visibility();
+        game_state.update_visibility(initial_visibility_algorithm);
         game_state
     }
 
-    pub fn update_visibility(&mut self) {
-        let player_coord = self.world.spatial_table.coord_of(self.player_entity).unwrap();
+    pub fn update_visibility(&mut self, visibility_algorithm: VisibilityAlgorithm) {
+        let player_coord = self
+            .world
+            .spatial_table
+            .coord_of(self.player_entity)
+            .unwrap();
         self.visibility_grid
-            .update(player_coord, &self.world, &mut self.shadowcast_context);
+            .update(
+                player_coord,
+                &self.world,
+                &mut self.shadowcast_context,
+                visibility_algorithm,
+            );
     }
 
     pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
@@ -77,5 +90,9 @@ impl GameState {
                 visibility,
             })
         })
+    }
+
+    pub fn wait_player(&mut self) {
+        self.ai_turn();
     }
 }

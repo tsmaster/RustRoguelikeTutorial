@@ -21,6 +21,12 @@ impl shadowcast::InputGrid for Visibility {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum VisibilityAlgorithm {
+    Shadowcast,
+    Omniscient,
+}
+
 pub struct VisibilityGrid {
     grid: Grid<VisibilityCell>,
     count: u64,
@@ -53,21 +59,31 @@ impl VisibilityGrid {
         player_coord: Coord,
         world: &World,
         shadowcast_context: &mut shadowcast::Context<u8>,
+        algorithm: VisibilityAlgorithm,
     ) {
         self.count +=1;
-        let count = self.count;
-        let grid = &mut self.grid;
-        shadowcast_context.for_each_visible(
-            player_coord,
-            &Visibility,
-            world,
-            VISION_DISTANCE,
-            255,
-            |coord, _visible_directions, _visibility| {
-                let cell = grid.get_checked_mut(coord);
-                cell.last_seen = count;
-            },
-        );
+        match algorithm {
+            VisibilityAlgorithm::Omniscient => {
+                for cell in self.grid.iter_mut() {
+                    cell.last_seen = self.count;
+                }
+            }
+            VisibilityAlgorithm::Shadowcast => {
+                let count = self.count;
+                let grid = &mut self.grid;
+                shadowcast_context.for_each_visible(
+                    player_coord,
+                    &Visibility,
+                    world,
+                    VISION_DISTANCE,
+                    255,
+                    |coord, _visible_directions, _visibility| {
+                        let cell = grid.get_checked_mut(coord);
+                        cell.last_seen = count;
+                    },
+                );
+            }
+        }
     }
 }
 
