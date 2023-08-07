@@ -142,7 +142,7 @@ impl World {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         let mut player_entity = None;
         let mut ai_state = ComponentTable::default();
-        
+
         for (coord, &terrain_tile) in terrain.enumerate() {
             match terrain_tile {
                 TerrainTile::Player => {
@@ -165,7 +165,7 @@ impl World {
             player_entity: player_entity.unwrap(),
             ai_state,
         }
-        
+
     }
 
     pub fn maybe_move_character(&mut self, character_entity: Entity, direction: CardinalDirection) {
@@ -212,8 +212,15 @@ impl World {
     pub fn entity_coord(&self, entity: Entity) -> Option<Coord> {
         self.spatial_table.coord_of(entity)
     }
-}    
-        
+
+    pub fn can_npc_see_through_cell(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| layers.feature.is_none())
+            .unwrap_or(false)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NpcType {
     Orc,
@@ -230,5 +237,3 @@ impl NpcType {
 }
 
 // TODO add more NpcTypes
-
-
