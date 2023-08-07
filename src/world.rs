@@ -2,7 +2,7 @@
 
 use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
-use entity_table::{Entity, EntityAllocator};
+use entity_table::{ComponentTable, Entity, EntityAllocator};
 use rand::Rng;
 
 use crate::terrain::{self, TerrainTile};
@@ -38,15 +38,15 @@ type SpatialTable = spatial_table::SpatialTable<layers::Layers>;
 pub type Location = spatial_table::Location<Layer>;
 
 
-
-pub struct Populate {
-    pub player_entity: Entity,
-}
-
 pub struct World {
     pub entity_allocator: EntityAllocator,
     pub components: Components,
     pub spatial_table: SpatialTable,
+}
+
+pub struct Populate {
+    pub player_entity: Entity,
+    pub ai_state: ComponentTable<()>,
 }
 
 impl World {
@@ -76,6 +76,10 @@ impl World {
         } else {
             0
         }
+    }
+
+    pub fn npc_type(&self, entity: Entity) -> Option<NpcType> {
+        self.components.npc_type.get(entity).cloned()
     }
 
     fn spawn_player(&mut self, coord: Coord) -> Entity {
@@ -140,6 +144,7 @@ impl World {
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         let mut player_entity = None;
+        let mut ai_state = ComponentTable::default();
         
         for (coord, &terrain_tile) in terrain.enumerate() {
             match terrain_tile {
@@ -155,12 +160,13 @@ impl World {
                 TerrainTile::Npc(npc_type) => {
                     let entity = self.spawn_npc(coord, npc_type);
                     self.spawn_floor(coord);
-                    //ai_state.insert(entity, ());
+                    ai_state.insert(entity, ());
                 }
             }
         }
         Populate {
             player_entity: player_entity.unwrap(),
+            ai_state,
         }
         
     }
