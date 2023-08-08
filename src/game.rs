@@ -8,7 +8,7 @@ use rand_isaac::Isaac64Rng;
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{HitPoints, ItemType, Location, NpcType, Populate, Tile, World};
+use crate::world::{HitPoints, Inventory, ItemType, Location, NpcType, Populate, Tile, World};
 
 
 pub struct EntityToRender {
@@ -86,6 +86,41 @@ impl GameState {
         }
     }
 
+    pub fn maybe_player_use_item(&mut self, inventory_index: usize) -> Result<(), ()> {
+        let result =
+            self
+              .world
+              .maybe_use_item(self.player_entity, inventory_index, &mut self.message_log);
+        if result.is_ok() {
+            self.ai_turn();
+        }
+        result
+    }
+
+    pub fn maybe_player_drop_item(&mut self, inventory_index: usize) -> Result<(), ()> {
+        let result =
+            self.world
+              .maybe_drop_item(self.player_entity, inventory_index, &mut self.message_log);
+        if result.is_ok() {
+            self.ai_turn();
+        }
+        result
+    }
+
+    pub fn player_inventory(&self) -> &Inventory {
+        self.world
+            .inventory(self.player_entity)
+            .expect("player has no inventory")
+    }
+
+    pub fn item_type(&self, entity: Entity) -> Option<ItemType> {
+        self.world.item_type(entity)
+    }
+
+    pub fn size(&self) -> Size {
+        self.world.size()
+    }
+        
     fn ai_turn(&mut self) {
         self.behavior_context
             .update(self.player_entity, &self.world);
@@ -153,5 +188,9 @@ pub enum LogMessage {
     PlayerGets(ItemType),
     PlayerInventoryIsFull,
     NoItemUnderPlayer,
+    NoItemInInventorySlot,
+    PlayerHeals,
+    PlayerDrops(ItemType),
+    NoSpaceToDropItem,
 }
 
