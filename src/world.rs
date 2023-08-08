@@ -18,6 +18,7 @@ pub enum Tile {
     Npc(NpcType),
     PlayerCorpse,
     NpcCorpse(NpcType),
+    Item(ItemType),
 }
 
 entity_table::declare_entity_module! {
@@ -25,6 +26,8 @@ entity_table::declare_entity_module! {
         tile: Tile,
         npc_type: NpcType,
         hit_points: HitPoints,
+        item: ItemType,
+        inventory: Inventory,
     }
 }
 
@@ -34,8 +37,8 @@ spatial_table::declare_layers_module! {
     layers {
         floor: Floor,
         character: Character,
+        object: Object,
         feature: Feature,
-        corpse: Corpse,
     }
 }
 
@@ -99,6 +102,10 @@ impl World {
         self.components
             .hit_points
             .insert(entity, HitPoints::new_full(20));
+        self.components
+            .inventory.
+            insert(entity, Inventory::new(10));
+            
         entity
     }
 
@@ -128,6 +135,21 @@ impl World {
             )
             .unwrap();
         self.components.tile.insert(entity, Tile::Floor);
+    }
+
+    fn spawn_item(&mut self, coord: Coord, item_type: ItemType) {
+        let entity = self.entity_allocator.alloc();
+        self.spatial_table
+            .update(
+                entity,
+                Location {
+                    coord,
+                    layer: Some(Layer::Object),
+                },
+            )
+            .unwrap();
+        self.components.tile.insert(entity, Tile::Item(item_type));
+        self.components.item.insert(entity, item_type);
     }
 
     fn spawn_npc(&mut self, coord: Coord, npc_type: NpcType) -> Entity {
@@ -171,6 +193,10 @@ impl World {
                     let entity = self.spawn_npc(coord, npc_type);
                     self.spawn_floor(coord);
                     ai_state.insert(entity, Agent::new());
+                }
+                TerrainTile::Item(item_type) => {
+                    self.spawn_item(coord, item_type);
+                    self.spawn_floor(coord);
                 }
             }
         }
@@ -216,6 +242,38 @@ impl World {
         }
     }
 
+    pub fn maybe_get_item(
+        &mut self,
+        character: Entity,
+        message_log: &mut Vec<LogMessage>,
+    ) -> Result<(), ()> {
+        let coord = self
+            .spatial_table
+            .coord_of(character)
+            .expect("character has no coord");
+        if let Some(object_entity) =
+            self.spatial_table.layers_at_checked(coord).object {
+                if let Some(&item_type) = self.components.item.get(object_entity) {
+                    // assumes only player characters can get items
+                    let inventory = self
+                        .components
+                        .inventory
+                        .get_mut(character)
+                        .expect("character has no inventory");
+                    if inventory.insert(object_entity).is_ok() {
+                        self.spatial_table.remove(object_entity);
+                        message_log.push(LogMessage::PlayerGets(item_type));
+                        return Ok(());
+                    } else {
+                        message_log.push(LogMessage::PlayerInventoryIsFull);
+                        return Err(());
+                    }
+                }
+            }
+        message_log.push(LogMessage::NoItemUnderPlayer);
+        Err(())
+    }
+                
     fn character_bump_attack(&mut self, victim: Entity) -> Option<VictimDies> {
         const DAMAGE: u32 = 1;
         if let Some(hit_points) = self.components.hit_points.get_mut(victim) {
@@ -264,7 +322,7 @@ impl World {
     fn character_die(&mut self, entity: Entity) {
         if let Some(occupied_by_entity) = self
             .spatial_table
-            .update_layer(entity, Layer::Corpse)
+            .update_layer(entity, Layer::Object)
             .err()
             .map(|e| e.unwrap_occupied_by())
         {
@@ -272,7 +330,7 @@ impl World {
             // corpse and replace it with the new corpse.
             self.remove_entity(occupied_by_entity);
             self.spatial_table
-                .update_layer(entity, Layer::Corpse)
+                .update_layer(entity, Layer::Object)
                 .unwrap();
         }
         let current_tile = self.components.tile.get(entity).unwrap();
@@ -351,3 +409,69 @@ impl HitPoints {
 }
 
 struct VictimDies;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ItemType {
+    HealthPotion,
+}
+
+impl ItemType {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::HealthPotion => "health potion",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Inventory {
+    slots: Vec<Option<Entity>>,
+}
+
+pub struct InventoryIsFull;
+
+#[derive(Debug)]
+pub struct InventorySlotIsEmpty;
+
+#[derive(Clone, Copy)]
+pub enum ItemUsage {
+    Immediate,
+    Aim,
+}
+
+
+impl Inventory {
+    pub fn new(capacity: usize) -> Self {
+        let slots = vec![None; capacity];
+        Self { slots }
+    }
+
+    pub fn slots(&self) -> &[Option<Entity>] {
+        &self.slots
+    }
+
+    pub fn insert(&mut self, item: Entity) -> Result<(), InventoryIsFull> {
+        if let Some(slot) = self.slots.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(item);
+            Ok(())
+        } else {
+            Err(InventoryIsFull)
+        }
+    }
+
+    pub fn remove(&mut self, index: usize) -> Result<Entity, InventorySlotIsEmpty> {
+        if let Some(slot) = self.slots.get_mut(index) {
+            slot.take().ok_or(InventorySlotIsEmpty)
+        } else {
+            Err(InventorySlotIsEmpty)
+        }
+    }
+
+    pub fn get(&self, index: usize) -> Result<Entity, InventorySlotIsEmpty> {
+        self.slots
+            .get(index)
+            .cloned()
+            .flatten()
+            .ok_or(InventorySlotIsEmpty)
+    }
+}

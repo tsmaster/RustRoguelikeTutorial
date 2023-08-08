@@ -149,7 +149,19 @@ impl<'a> View<&'a [LogMessage]> for MessagesView {
                     buf[1].text.make_ascii_uppercase();
                     buf[1].style.foreground = Some(colors::npc_color(npc_type));
                     write!(&mut buf[2].text, " KILLS YOU.").unwrap();
-                    buf[2].style.foreground = Some(Rgb24::new(255, 0, 0));                    
+                    buf[2].style.foreground = Some(Rgb24::new(255, 0, 0));
+                }
+                PlayerGets(item_type) => {
+                    write!(&mut buf[0].text, "You get the ").unwrap();
+                    write!(&mut buf[1].text, "{}", item_type.name()).unwrap();
+                    buf[1].style.foreground = Some(colors::item_color(item_type));
+                    write!(&mut buf[2].text, ".").unwrap();
+                }
+                PlayerInventoryIsFull => {
+                    write!(&mut buf[0].text, "Inventory is full!").unwrap();
+                }
+                NoItemUnderPlayer => {
+                    write!(&mut buf[0].text, "Nothing to get!").unwrap();
                 }
             }
         }

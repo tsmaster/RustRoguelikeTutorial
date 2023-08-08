@@ -8,7 +8,7 @@ use rand_isaac::Isaac64Rng;
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{HitPoints, Location, NpcType, Populate, Tile, World};
+use crate::world::{HitPoints, ItemType, Location, NpcType, Populate, Tile, World};
 
 
 pub struct EntityToRender {
@@ -76,6 +76,16 @@ impl GameState {
         self.ai_turn();
     }
 
+    pub fn maybe_player_get_item(&mut self) {
+        if self
+            .world
+            .maybe_get_item(self.player_entity, &mut self.message_log)
+            .is_ok()
+        {
+            self.ai_turn();
+        }
+    }
+
     fn ai_turn(&mut self) {
         self.behavior_context
             .update(self.player_entity, &self.world);
@@ -140,5 +150,8 @@ pub enum LogMessage {
     NpcAttacksPlayer(NpcType),
     PlayerKillsNpc(NpcType),
     NpcKillsPlayer(NpcType),
+    PlayerGets(ItemType),
+    PlayerInventoryIsFull,
+    NoItemUnderPlayer,
 }
 
