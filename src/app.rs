@@ -1,10 +1,11 @@
 // app.rs
 
 use chargrid::{
-    app::{App as ChargridApp, ControlFlow},
+    app::App as ChargridApp,
     decorator::{
         AlignView, Alignment, BorderStyle, BorderView, BoundView, FillBackgroundView, MinSizeView,
     },
+    event_routine::{self, common_event::CommonEvent, EventOrPeek, EventRoutine, Handled},
     input::{keys, Input, KeyboardInput},
     menu::{self, MenuIndexFromScreenCoord, MenuInstanceBuilder,
            MenuInstanceChoose, MenuInstanceChooseOrEscape, MenuInstanceMouseTracker},
@@ -15,7 +16,6 @@ use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use rgb24::Rgb24;
 use std::collections::HashMap;
-use std::time::Duration;
 
 use crate::game::GameState;
 use crate::ui::{UiData, UiView};
@@ -90,7 +90,7 @@ impl AppData {
         }
     }
 
-    fn handle_input(&mut self, input: Input, view: &AppView) -> Option<ControlFlow> {
+    fn handle_input(&mut self, input: Input, view: &AppView) -> Option<Exit> {
         if !self.game_state.is_player_alive() {
             return None;
         }
@@ -117,7 +117,7 @@ impl AppData {
                     KeyboardInput::Char('d') => {
                         self.app_state = AppState::Menu(AppStateMenu::DropItem)
                     }
-                    keys::ESCAPE => return Some(ControlFlow::Exit),
+                    keys::ESCAPE => return Some(Exit),
                     _ => (),
                 },
                 _ => (),
@@ -208,7 +208,7 @@ impl <'a> View<&'a AppData> for AppView {
                 }.view(data, context.add_depth(10), frame);
                 col_modify_dim(1, 2)
             }
-        };                
+        };
         self.game_view.view(
             &data.game_state,
             context.compose_col_modify(game_col_modify),
@@ -228,52 +228,59 @@ impl <'a> View<&'a AppData> for AppView {
 }
 
 
+struct AppEventRoutine;
 
-pub struct App {
-    data: AppData,
-    view: AppView,
-}
-
-impl App {
-    pub fn new(
-        screen_size: Size,
-        rng_seed: u64,
-        visibility_algorithm: VisibilityAlgorithm,
-    ) -> Self {
-        Self {
-            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
-            view: AppView::new(screen_size),
-        }
-    }
-}
-
-impl ChargridApp for App {
-    fn on_input (
-        &mut self,
-        input: chargrid::app::Input,
-    ) -> Option<ControlFlow> {
-        match input {
-            Input::Keyboard(keys::ETX) => 
-                Some(chargrid::app::ControlFlow::Exit),
-            other =>
-                self.data.handle_input(other, &self.view),
-        }
-    }
-
-    fn on_frame<F, C> (
-        &mut self,
-        _since_last_frame: Duration,
-        view_context: ViewContext<C>,
-        frame: &mut F,
-    ) -> Option<chargrid::app::ControlFlow>
+impl EventRoutine for AppEventRoutine {
+    type Return = ();
+    type Data = AppData;
+    type View = AppView;
+    type Event = CommonEvent;
+    fn handle<EP>(
+        self,
+        data: &mut Self::Data,
+        view: &Self::View,
+        event_or_peek: EP,
+    ) -> Handled<Self::Return, Self>
     where
+        EP: EventOrPeek<Event = Self::Event>,
+    {
+        event_routine::event_or_peek_with_handled(event_or_peek, self, |s, event| match event {
+            CommonEvent::Input(input) => match data.handle_input(input, view) {
+                None => Handled::Continue(s),
+                Some(Exit) => Handled::Return(()),
+            },
+            CommonEvent::Frame(_) => Handled::Continue(s),
+        })
+    }
+    fn view<F, C>(
+        &self,
+        data: &Self::Data,
+        view: &mut Self::View,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) where
         F: Frame,
         C: ColModify,
     {
-        self.view.view(&self.data, view_context, frame);
-        None
+        view.view(data, context, frame);
     }
 }
+
+fn game_loop() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, Event = CommonEvent>
+{
+    AppEventRoutine.return_on_exit(|_| ())
+}
+
+pub fn app(
+    screen_size: Size,
+    rng_seed: u64,
+    visibility_algorithm: VisibilityAlgorithm,
+) -> impl ChargridApp {
+    let data = AppData::new(screen_size, rng_seed, visibility_algorithm);
+    let view = AppView::new(screen_size);
+    game_loop().app_one_shot_ignore_return(data, view)
+}
+
 
 fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
     match tile {
@@ -448,3 +455,5 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
         }
     }
 }
+
+struct Exit;

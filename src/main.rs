@@ -1,6 +1,6 @@
 // src/main.rs
 
-use app::App;
+use app::app;
 use chargrid_graphical::{Config, Context, Dimensions, FontBytes};
 use coord_2d::Size;
 use meap;
@@ -48,7 +48,7 @@ fn main() {
         resizable: false,
     });
     let screen_size = Size::new(40, 30);
-    let app = App::new(screen_size, rng_seed, visibility_algorithm);
+    let app = app(screen_size, rng_seed, visibility_algorithm);
     context.run_app(app);        
 }
 
