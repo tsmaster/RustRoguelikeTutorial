@@ -283,12 +283,6 @@ struct InventorySlotMenuEntry {
     key: char,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum AppStateMenu {
-    UseItem,
-    DropItem,
-}
-
 #[derive(Default)]
 struct InventorySlotMenuView {
     mouse_tracker: MenuInstanceMouseTracker,
@@ -359,8 +353,6 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
         }
     }
 }
-
-struct Exit;
 
 struct InventorySlotMenuSelect;
 
@@ -586,5 +578,5 @@ fn game_over() -> impl EventRoutine<Return = (), Data = AppData, View = AppView,
             event_routine_view.view.render_ui(&data, context, frame);
         }
     }
-    Delay::new(Duration::from_millis(4000)).decorated(GameOverDecorate)
+    Delay::new(Duration::from_millis(2000)).decorated(GameOverDecorate)
 }

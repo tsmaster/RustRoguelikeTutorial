@@ -523,12 +523,6 @@ pub struct InventoryIsFull;
 #[derive(Debug)]
 pub struct InventorySlotIsEmpty;
 
-#[derive(Clone, Copy)]
-pub enum ItemUsage {
-    Immediate,
-    Aim,
-}
-
 
 impl Inventory {
     pub fn new(capacity: usize) -> Self {
@@ -555,13 +549,5 @@ impl Inventory {
         } else {
             Err(InventorySlotIsEmpty)
         }
-    }
-
-    pub fn get(&self, index: usize) -> Result<Entity, InventorySlotIsEmpty> {
-        self.slots
-            .get(index)
-            .cloned()
-            .flatten()
-            .ok_or(InventorySlotIsEmpty)
     }
 }
