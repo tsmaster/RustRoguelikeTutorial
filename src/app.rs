@@ -5,10 +5,13 @@ use chargrid::{
     decorator::{
         AlignView, Alignment, BorderStyle, BorderView, BoundView, FillBackgroundView, MinSizeView,
     },
-    event_routine::{self, common_event::CommonEvent, EventOrPeek, EventRoutine, Handled},
+    event_routine::{self, common_event::CommonEvent, make_either, DataSelector,
+                    Decorate, EventOrPeek, EventRoutine, EventRoutineView, Handled, Loop,
+                    SideEffect, Value, ViewSelector},
     input::{keys, Input, KeyboardInput},
-    menu::{self, MenuIndexFromScreenCoord, MenuInstanceBuilder,
-           MenuInstanceChoose, MenuInstanceChooseOrEscape, MenuInstanceMouseTracker},
+    menu::{self, ChooseSelector, MenuIndexFromScreenCoord, MenuInstanceBuilder,
+           MenuInstanceChoose, MenuInstanceChooseOrEscape, MenuInstanceMouseTracker,
+           MenuInstanceRoutine},
     render::{ColModify, ColModifyMap, Frame, Style, View, ViewCell, ViewContext},
     text::{RichTextPart, RichTextViewSingleLine},
 };
@@ -50,7 +53,6 @@ pub mod colors {
 
 
 struct AppData {
-    app_state: AppState,
     game_state: GameState,
     inventory_slot_menu: MenuInstanceChooseOrEscape<InventorySlotMenuEntry>,
     visibility_algorithm: VisibilityAlgorithm,
@@ -81,7 +83,6 @@ impl AppData {
                 .into_choose_or_escape()
         };
         Self {
-            app_state: AppState::Game,
             game_state: GameState::new(game_area_size,
                                        rng_seed,
                                        visibility_algorithm),
@@ -90,57 +91,32 @@ impl AppData {
         }
     }
 
-    fn handle_input(&mut self, input: Input, view: &AppView) -> Option<Exit> {
+    fn handle_input(&mut self, input: Input) -> Option<GameReturn> {
         if !self.game_state.is_player_alive() {
-            return None;
+            return Some(GameReturn::GameOver);
         }
-        match self.app_state {
-            AppState::Game => match input {
-                Input::Keyboard(key) => match key {
-                    KeyboardInput::Left => {
-                        self.game_state.maybe_move_player(CardinalDirection::West)
-                    }
-                    KeyboardInput::Right => {
-                        self.game_state.maybe_move_player(CardinalDirection::East)
-                    }
-                    KeyboardInput::Up => {
-                        self.game_state.maybe_move_player(CardinalDirection::North)
-                    }
-                    KeyboardInput::Down => {
-                        self.game_state.maybe_move_player(CardinalDirection::South)
-                    }
-                    KeyboardInput::Char(' ') => self.game_state.wait_player(),
-                    KeyboardInput::Char('g') => self.game_state.maybe_player_get_item(),
-                    KeyboardInput::Char('i') => {
-                        self.app_state = AppState::Menu(AppStateMenu::UseItem)
-                    }
-                    KeyboardInput::Char('d') => {
-                        self.app_state = AppState::Menu(AppStateMenu::DropItem)
-                    }
-                    keys::ESCAPE => return Some(Exit),
-                    _ => (),
-                },
+        match input {
+            Input::Keyboard(key) => match key {
+                KeyboardInput::Left => {
+                    self.game_state.maybe_move_player(CardinalDirection::West)
+                }
+                KeyboardInput::Right => {
+                    self.game_state.maybe_move_player(CardinalDirection::East)
+                }
+                KeyboardInput::Up => {
+                    self.game_state.maybe_move_player(CardinalDirection::North)
+                }
+                KeyboardInput::Down => {
+                    self.game_state.maybe_move_player(CardinalDirection::South)
+                }
+                KeyboardInput::Char(' ') => self.game_state.wait_player(),
+                KeyboardInput::Char('g') => self.game_state.maybe_player_get_item(),
+                KeyboardInput::Char('i') => return Some(GameReturn::UseItem),
+                KeyboardInput::Char('d') => return Some(GameReturn::DropItem),
+                keys::ESCAPE => return Some(GameReturn::Exit),
                 _ => (),
             },
-            AppState::Menu(menu) => match self
-                .inventory_slot_menu
-                .choose(&view.inventory_slot_menu_view, input)
-            {
-                None => (),
-                Some(Err(menu::Escape)) => self.app_state = AppState::Game,
-                Some(Ok(entry)) => match menu {
-                    AppStateMenu::UseItem => {
-                        if self.game_state.maybe_player_use_item(entry.index).is_ok() {
-                            self.app_state = AppState::Game;
-                        }
-                    }
-                    AppStateMenu::DropItem => {
-                        if self.game_state.maybe_player_drop_item(entry.index).is_ok() {
-                            self.app_state = AppState::Game;
-                        }
-                    }
-                },
-            },
+            _ => (),
         }
         self.game_state.update_visibility(self.visibility_algorithm);
         None
@@ -167,53 +143,13 @@ impl AppView {
             ui_view: UiView::default(),
         }
     }
-}
 
-impl <'a> View<&'a AppData> for AppView {
-    fn view<F: Frame, C: ColModify>(
+    fn render_ui<F: Frame, C: ColModify>(
         &mut self,
-        data: &'a AppData,
+        data: &AppData,
         context: ViewContext<C>,
         frame: &mut F,
     ) {
-        fn col_modify_dim(num: u32, denom: u32) -> impl ColModify {
-            ColModifyMap(move |col: Rgb24| col.saturating_scalar_mul_div(num, denom))
-        }
-        let game_col_modify = match data.app_state {
-            AppState::Game => col_modify_dim(1, 1),
-            AppState::Menu(menu) => {
-                let title_text = match menu {
-                    AppStateMenu::UseItem => "Use Item",
-                    AppStateMenu::DropItem => "Drop Item",
-                };
-                BoundView {
-                    size: data.game_state.size(),
-                    view: AlignView {
-                        alignment: Alignment::centre(),
-                        view: FillBackgroundView {
-                            rgb24: Rgb24::new_grey(0),
-                            view: BorderView {
-                                style: &BorderStyle {
-                                    title: Some(title_text.to_string()),
-                                    title_style: Style::new().with_foreground(Rgb24::new_grey(255)),
-                                    ..Default::default()
-                                },
-                                view: MinSizeView {
-                                    size: Size::new(12, 0),
-                                    view: &mut self.inventory_slot_menu_view,
-                                },
-                            },
-                        },
-                    },
-                }.view(data, context.add_depth(10), frame);
-                col_modify_dim(1, 2)
-            }
-        };
-        self.game_view.view(
-            &data.game_state,
-            context.compose_col_modify(game_col_modify),
-            frame,
-        );
         let player_hit_points = data.game_state.player_hit_points();
         let messages = data.game_state.message_log();
         self.ui_view.view(
@@ -228,47 +164,17 @@ impl <'a> View<&'a AppData> for AppView {
 }
 
 
-struct AppEventRoutine;
-
-impl EventRoutine for AppEventRoutine {
-    type Return = ();
-    type Data = AppData;
-    type View = AppView;
-    type Event = CommonEvent;
-    fn handle<EP>(
-        self,
-        data: &mut Self::Data,
-        view: &Self::View,
-        event_or_peek: EP,
-    ) -> Handled<Self::Return, Self>
-    where
-        EP: EventOrPeek<Event = Self::Event>,
-    {
-        event_routine::event_or_peek_with_handled(event_or_peek, self, |s, event| match event {
-            CommonEvent::Input(input) => match data.handle_input(input, view) {
-                None => Handled::Continue(s),
-                Some(Exit) => Handled::Return(()),
-            },
-            CommonEvent::Frame(_) => Handled::Continue(s),
-        })
-    }
-    fn view<F, C>(
-        &self,
-        data: &Self::Data,
-        view: &mut Self::View,
-        context: ViewContext<C>,
-        frame: &mut F,
-    ) where
-        F: Frame,
-        C: ColModify,
-    {
-        view.view(data, context, frame);
-    }
-}
-
 fn game_loop() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, Event = CommonEvent>
 {
-    AppEventRoutine.return_on_exit(|_| ())
+    make_either!(Ei = A | B | C | D);
+    Loop::new(|| {
+        GameEventRoutine.and_then(|game_return| match game_return {
+            GameReturn::Exit => Ei::A(Value::new(Some(()))),
+            GameReturn::GameOver => Ei::B(Value::new(Some(()))),
+            GameReturn::UseItem => Ei::C(use_item().map(|_| None)),
+            GameReturn::DropItem => Ei::D(drop_item().map(|_| None)),
+        })
+    }).return_on_exit(|_| ())
 }
 
 pub fn app(
@@ -379,12 +285,6 @@ enum AppStateMenu {
     DropItem,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum AppState {
-    Game,
-    Menu(AppStateMenu),
-}
-
 #[derive(Default)]
 struct InventorySlotMenuView {
     mouse_tracker: MenuInstanceMouseTracker,
@@ -457,3 +357,186 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
 }
 
 struct Exit;
+
+struct InventorySlotMenuSelect;
+
+impl ChooseSelector for InventorySlotMenuSelect {
+    type ChooseOutput = MenuInstanceChooseOrEscape<InventorySlotMenuEntry>;
+    fn choose_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::ChooseOutput {
+        &mut input.inventory_slot_menu
+    }
+}
+
+impl DataSelector for InventorySlotMenuSelect {
+    type DataInput = AppData;
+    type DataOutput = AppData;
+    fn data<'a>(&self, input: &'a Self::DataInput) -> &'a Self::DataOutput {
+        input
+    }
+    fn data_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::DataOutput {
+        input
+    }
+}
+
+impl ViewSelector for InventorySlotMenuSelect {
+    type ViewInput = AppView;
+    type ViewOutput = InventorySlotMenuView;
+    fn view<'a>(&self, input: &'a Self::ViewInput) -> &'a Self::ViewOutput {
+        &input.inventory_slot_menu_view
+    }
+    fn view_mut<'a>(&self, input: &'a mut Self::ViewInput) -> &'a mut Self::ViewOutput {
+        &mut input.inventory_slot_menu_view
+    }
+}
+
+
+struct InventorySlotMenuDecorate<'a> {
+    title: &'a str,
+}
+
+impl<'a> Decorate for InventorySlotMenuDecorate<'a> {
+    type View = AppView;
+    type Data = AppData;
+    fn view<E, F, C>(
+        &self,
+        data: &Self::Data,
+        mut event_routine_view: EventRoutineView<E>,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) where
+        E: EventRoutine<Data = Self::Data, View = Self::View>,
+        F: Frame,
+        C: ColModify,
+    {
+        BoundView {
+            size: data.game_state.size(),
+            view: AlignView {
+                alignment: Alignment::centre(),
+                view: FillBackgroundView {
+                    rgb24: Rgb24::new_grey(0),
+                    view: BorderView {
+                        style: &BorderStyle {
+                            title: Some(self.title.to_string()),
+                            title_style: Style::new().with_foreground(Rgb24::new_grey(255)),
+                            ..Default::default()
+                        },
+                        view: MinSizeView {
+                            size: Size::new(12, 0),
+                            view: &mut event_routine_view,
+                        },
+                    },
+                },
+            },
+        }.view(data, context.add_depth(10), frame);
+        event_routine_view.view.game_view.view(
+            &data.game_state,
+            context.compose_col_modify(ColModifyMap(|c: Rgb24| c.saturating_scalar_mul_div(1, 2))),
+            frame,
+        );
+        event_routine_view.view.render_ui(&data, context, frame);
+    }
+}
+
+fn inventory_slot_menu<'a>(title: &'a str,) -> impl 'a
+    + EventRoutine<
+            Return = Result<InventorySlotMenuEntry, menu::Escape>,
+            Data = AppData,
+            View = AppView,
+            Event = CommonEvent,
+        > {
+        MenuInstanceRoutine::new(InventorySlotMenuSelect)
+            .convert_input_to_common_event()
+            .decorated(InventorySlotMenuDecorate { title })
+}
+
+
+struct GameEventRoutine;
+
+enum GameReturn {
+    Exit,
+    UseItem,
+    DropItem,
+    GameOver,
+}
+
+impl EventRoutine for GameEventRoutine {
+    type Return = GameReturn;
+    type Data = AppData;
+    type View = AppView;
+    type Event = CommonEvent;
+
+    fn handle<EP>(
+        self,
+        data: &mut Self::Data,
+        _view: &Self::View,
+        event_or_peek: EP,
+    ) -> Handled<Self::Return, Self>
+    where
+        EP: EventOrPeek<Event = Self::Event>,
+    {
+        event_routine::event_or_peek_with_handled(event_or_peek, self, |s, event| match event{
+            CommonEvent::Input(input) => {
+                if let Some(game_return) = data.handle_input(input) {
+                    Handled::Return(game_return)
+                } else {
+                    Handled::Continue(s)
+                }
+            }
+            CommonEvent::Frame(_period) => Handled::Continue(s),
+        })
+    }
+
+    fn view<F, C>(
+        &self,
+        data: &Self::Data,
+        view: &mut Self::View,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) where
+        F: Frame,
+        C: ColModify,
+    {
+        view.game_view.view(&data.game_state, context, frame);
+        view.render_ui(&data, context, frame);
+    }
+}
+
+
+fn use_item() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, Event = CommonEvent>
+{
+    make_either!(Ei = A | B);
+    Loop::new(|| {
+        inventory_slot_menu("Use Item").and_then(|result| match result {
+            Err(menu::Escape) => Ei::A(Value::new(Some(()))),
+            Ok(entry) => Ei::B(SideEffect::new_with_view(
+                move |data: &mut AppData, _: &_| {
+                    if data.game_state.maybe_player_use_item(entry.index).is_ok() {
+                        Some(())
+                    } else {
+                        None
+                    }
+                },
+            )),
+        })
+    })
+}
+
+
+fn drop_item() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, Event = CommonEvent>
+{
+    make_either!(Ei = A | B);
+    Loop::new(|| {
+        inventory_slot_menu("Drop Item").and_then(|result| match result {
+            Err(menu::Escape) => Ei::A(Value::new(Some(()))),
+            Ok(entry) => Ei::B(SideEffect::new_with_view(
+                move |data: &mut AppData, _: &_| {
+                    if data.game_state.maybe_player_drop_item(entry.index).is_ok() {
+                        Some(())
+                    } else {
+                        None
+                    }
+                },
+            )),
+        })
+    })
+}
