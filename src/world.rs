@@ -6,7 +6,7 @@ use entity_table::{ComponentTable, Entity, EntityAllocator};
 use rand::Rng;
 
 use crate::behavior::Agent;
-use crate::game::LogMessage;
+use crate::game::{ExamineCell, LogMessage};
 use crate::terrain::{self, TerrainTile};
 
 
@@ -465,6 +465,25 @@ impl World {
 
     pub fn item_type(&self, entity: Entity) -> Option<ItemType> {
         self.components.item.get(entity).cloned()
+    }
+
+    pub fn examine_cell(&self, coord: Coord) -> Option<ExamineCell> {
+        let layers = self.spatial_table.layers_at(coord)?;
+        layers
+            .character
+            .or_else(|| layers.object)
+            .and_then(|entity| {
+                self.components
+                    .tile
+                    .get(entity)
+                    .and_then(|&tile| match tile {
+                        Tile::Npc(npc_type) => Some(ExamineCell::Npc(npc_type)),
+                        Tile::NpcCorpse(npc_type) => Some(ExamineCell::NpcCorpse(npc_type)),
+                        Tile::Item(item_type) => Some(ExamineCell::Item(item_type)),
+                        Tile::Player => Some(ExamineCell::Player),
+                        _ => None,
+                    })
+            })
     }
 }
 

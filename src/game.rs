@@ -1,6 +1,6 @@
 // game.rs
 
-use coord_2d::Size;
+use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use entity_table::{ComponentTable, Entity};
 use rand::SeedableRng;
@@ -177,6 +177,19 @@ impl GameState {
             .hit_points(self.player_entity)
             .expect("player has no hit points")
     }
+
+    pub fn player_coord(&self) -> Coord {
+        self.world
+            .entity_coord(self.player_entity)
+            .expect("player has no coord")
+    }
+
+    pub fn examine_cell(&self, coord: Coord) -> Option<ExamineCell> {
+        match self.visibility_grid.cell_visibility(coord) {
+            CellVisibility::Currently => self.world.examine_cell(coord),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -192,5 +205,13 @@ pub enum LogMessage {
     PlayerHeals,
     PlayerDrops(ItemType),
     NoSpaceToDropItem,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExamineCell {
+    Npc(NpcType),
+    NpcCorpse(NpcType),
+    Item(ItemType),
+    Player,
 }
 
