@@ -308,6 +308,9 @@ impl World {
                 hit_points.current = hit_points.max.min(hit_points.current + HEALTH_TO_HEAL);
                 message_log.push(LogMessage::PlayerHeals);
             }
+            ItemType::FireballScroll => {
+                println!("todo");
+            }
         }
         Ok(())
     }
@@ -522,12 +525,14 @@ struct VictimDies;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ItemType {
     HealthPotion,
+    FireballScroll,
 }
 
 impl ItemType {
     pub fn name(self) -> &'static str {
         match self {
             Self::HealthPotion => "health potion",
+            Self::FireballScroll => "fireball scroll",
         }
     }
 }
