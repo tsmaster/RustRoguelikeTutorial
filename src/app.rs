@@ -5,9 +5,10 @@ use chargrid::{
     decorator::{
         AlignView, Alignment, BorderStyle, BorderView, BoundView, FillBackgroundView, MinSizeView,
     },
-    event_routine::{self, common_event::{CommonEvent, Delay}, make_either, DataSelector,
-                    Decorate, EventOrPeek, EventRoutine, EventRoutineView, Handled, Loop,
-                    SideEffect, Value, ViewSelector},
+    event_routine::{self, common_event::{CommonEvent, Delay},
+                    make_either, DataSelector, Decorate, EventOrPeek,
+                    EventRoutine, EventRoutineView, Handled, Loop,
+                    SideEffect, SideEffectThen, Value, ViewSelector},
     input::{keys, Input, KeyboardInput, MouseButton, MouseInput},
     menu::{self, ChooseSelector, MenuIndexFromScreenCoord, MenuInstanceBuilder,
            MenuInstanceChoose, MenuInstanceChooseOrEscape, MenuInstanceMouseTracker,
@@ -24,10 +25,11 @@ use std::time::Duration;
 use crate::game::GameState;
 use crate::ui::{UiData, UiView};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm};
-use crate::world::{ItemType, Layer, NpcType, Tile};
+use crate::world::{ItemType, ItemUsage, Layer, NpcType, ProjectileType, Tile};
 
 
 const UI_NUM_ROWS: u32 = 5;
+const BETWEEN_ANIMATION_TICKS: Duration = Duration::from_millis(33);
 
 
 pub mod colors {
@@ -52,6 +54,12 @@ pub mod colors {
             ItemType::FireballScroll => FIREBALL_SCROLL,
         }
     }
+
+    pub fn projectile_color(projectile_type: ProjectileType) -> Rgb24 {
+        match projectile_type {
+            ProjectileType::Fireball => FIREBALL_SCROLL,
+        }
+    }
 }
 
 
@@ -60,6 +68,7 @@ struct AppData {
     inventory_slot_menu: MenuInstanceChooseOrEscape<InventorySlotMenuEntry>,
     visibility_algorithm: VisibilityAlgorithm,
     cursor: Option<Coord>,
+    until_next_animation_tick: Duration,
 }
 
 impl AppData {
@@ -93,6 +102,7 @@ impl AppData {
             inventory_slot_menu,
             visibility_algorithm,
             cursor: None,
+            until_next_animation_tick: Duration::from_millis(0),
         }
     }
 
@@ -263,6 +273,9 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
         Tile::Item(ItemType::FireballScroll) => ViewCell::new()
             .with_character('♫')
             .with_foreground(colors::FIREBALL_SCROLL),
+        Tile::Projectile(ProjectileType::Fireball) => ViewCell::new()
+            .with_character('*')
+            .with_foreground(colors::FIREBALL_SCROLL),
     }
 }
 
@@ -307,6 +320,7 @@ impl<'a> View<&'a GameState> for GameView {
                 Some(Layer::Feature) => 1,
                 Some(Layer::Object) => 2,
                 Some(Layer::Character) => 3,
+                Some(Layer::Projectile) => 4,
             };
             frame.set_cell_relative(entity_to_render.location.coord, depth, view_cell, context);
         }
@@ -515,7 +529,17 @@ impl EventRoutine for GameEventRoutine {
                     Handled::Continue(s)
                 }
             }
-            CommonEvent::Frame(_period) => Handled::Continue(s),
+            CommonEvent::Frame(period) => {
+                if let Some(until_next_animation_tick) =
+                    data.until_next_animation_tick.checked_sub(period)
+                {
+                    data.until_next_animation_tick = until_next_animation_tick;
+                } else {
+                    data.until_next_animation_tick = BETWEEN_ANIMATION_TICKS;
+                    data.game_state.tick_animations();
+                }
+                Handled::Continue(s)
+            }
         })
     }
 
@@ -541,12 +565,34 @@ fn use_item() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, 
     Loop::new(|| {
         inventory_slot_menu("Use Item").and_then(|result| match result {
             Err(menu::Escape) => Ei::A(Value::new(Some(()))),
-            Ok(entry) => Ei::B(SideEffect::new_with_view(
+            Ok(entry) => Ei::B(SideEffectThen::new_with_view(
                 move |data: &mut AppData, _: &_| {
-                    if data.game_state.maybe_player_use_item(entry.index).is_ok() {
-                        Some(())
+                    make_either!(Ei = A | B | C);
+                    if let Ok(usage) = data.game_state.maybe_player_use_item(entry.index) {
+                        match usage {
+                            ItemUsage::Immediate => Ei::A(Value::new(Some(()))),
+                            ItemUsage::Aim => Ei::B(TargetEventRoutine { name: "AIM" }.and_then(
+                                move |maybe_coord| {
+                                    SideEffect::new_with_view(move |data: &mut AppData, _: &_| {
+                                        if let Some(coord) = maybe_coord {
+                                            if data
+                                                .game_state
+                                                .maybe_player_use_item_aim(entry.index, coord)
+                                                .is_ok()
+                                            {
+                                                Some(())
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                },
+                            )),
+                        }
                     } else {
-                        None
+                        Ei::C(Value::new(None))
                     }
                 },
             )),
@@ -696,4 +742,3 @@ impl EventRoutine for TargetEventRoutine {
         view.render_ui(Some(self.name), &data, context, frame);
     }
 }
-                            

@@ -44,7 +44,7 @@ impl<'a> View<UiData<'a>> for UiView {
         let message_log_offset = Coord::new(HEALTH_WIDTH as i32 + 1, 0);
         self.messages_view
             .view(data.messages, context.add_offset(message_log_offset), frame);
-        
+
         if let Some(name) = data.name {
             BoundView {
                 size: Size::new(HEALTH_WIDTH, 1),
@@ -95,7 +95,7 @@ impl View<HitPoints> for HealthView {
         use std::fmt::Write;
         self.buf.clear();
         write!(&mut self.buf, "{}/{}", hit_points.current, hit_points.max).unwrap();
-        
+
         let mut hit_points_text_view = BoundView {
             size: Size::new(HEALTH_WIDTH, 1),
             view: AlignView {
@@ -128,7 +128,7 @@ impl View<HitPoints> for HealthView {
     }
 }
 
-    
+
 struct MessagesView {
     buf: Vec<RichTextPartOwned>,
 }
@@ -214,6 +214,18 @@ impl<'a> View<&'a [LogMessage]> for MessagesView {
                 NoSpaceToDropItem => {
                     write!(&mut buf[0].text, "No space to drop item!").unwrap();
                 }
+                PlayerLaunchesProjectile(projectile) => {
+                    write!(&mut buf[0].text, "You launch a ").unwrap();
+                    write!(&mut buf[1].text, "{}", projectile.name()).unwrap();
+                    buf[1].style.foreground = Some(colors::projectile_color(projectile));
+                    write!(&mut buf[2].text, "!").unwrap();
+                }
+                NpcDies(npc_type) => {
+                    write!(&mut buf[0].text, "The ").unwrap();
+                    write!(&mut buf[1].text, "{}", npc_type.name()).unwrap();
+                    buf[1].style.foreground = Some(colors::npc_color(npc_type));
+                    write!(&mut buf[2].text, " dies.").unwrap();
+                }
             }
         }
 
@@ -230,7 +242,7 @@ impl<'a> View<&'a [LogMessage]> for MessagesView {
         }
     }
 }
-                    
+
 fn examine_cell_str(examine_cell: ExamineCell) -> &'static str {
     match examine_cell {
         ExamineCell::Npc(npc_type) | ExamineCell::NpcCorpse(npc_type) => npc_type.name(),
