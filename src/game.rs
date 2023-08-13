@@ -5,6 +5,7 @@ use direction::CardinalDirection;
 use entity_table::{ComponentTable, Entity};
 use rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
@@ -19,6 +20,7 @@ pub struct EntityToRender {
     pub visibility: CellVisibility,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct GameState {
     world: World,
     player_entity: Entity,
@@ -242,7 +244,7 @@ impl GameState {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum LogMessage {
     PlayerAttacksNpc(NpcType),
     NpcAttacksPlayer(NpcType),

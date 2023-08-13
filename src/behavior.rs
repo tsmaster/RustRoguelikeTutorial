@@ -13,9 +13,11 @@ use grid_search_cardinal::{
     CanEnter,
 };
 use line_2d::LineSegment;
+use serde::{Serialize, Deserialize};
 use shadowcast::{vision_distance, VisionDistance};
 
 
+#[derive(Serialize, Deserialize)]
 pub struct BehaviorContext {
     distance_map_to_player: DistanceMap,
     distance_map_populate_context: DistanceMapPopulateContext,
@@ -57,6 +59,7 @@ pub enum NpcAction {
     Move(CardinalDirection),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Agent {
     turns_since_last_saw_player: u32,
 }

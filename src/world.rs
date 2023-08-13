@@ -5,13 +5,14 @@ use direction::CardinalDirection;
 use entity_table::{ComponentTable, Entity, EntityAllocator};
 use line_2d::CardinalStepIter;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::behavior::Agent;
 use crate::game::{ExamineCell, LogMessage};
 use crate::terrain::{self, TerrainTile};
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Tile {
     Player,
     Floor,
@@ -53,6 +54,7 @@ type SpatialTable = spatial_table::SpatialTable<layers::Layers>;
 pub type Location = spatial_table::Location<Layer>;
 
 
+#[derive(Serialize, Deserialize)]
 pub struct World {
     pub entity_allocator: EntityAllocator,
     pub components: Components,
@@ -629,7 +631,7 @@ impl World {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NpcType {
     Orc,
     Troll,
@@ -647,7 +649,7 @@ impl NpcType {
 // TODO add more NpcTypes
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct HitPoints {
     pub current: u32,
     pub max: u32,
@@ -661,7 +663,7 @@ impl HitPoints {
 
 struct VictimDies;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ItemType {
     HealthPotion,
     FireballScroll,
@@ -678,7 +680,7 @@ impl ItemType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Inventory {
     slots: Vec<Option<Entity>>,
 }
@@ -731,7 +733,7 @@ pub enum ItemUsage {
     Aim,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ProjectileType {
     Fireball,
     Confusion,

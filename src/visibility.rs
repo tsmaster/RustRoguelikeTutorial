@@ -1,6 +1,8 @@
 use crate::world::World;
 use coord_2d::{Coord, Size};
 use grid_2d::Grid;
+use serde::{Serialize, Deserialize};
+
 
 const VISION_DISTANCE_SQUARED: u32 = 100;
 const VISION_DISTANCE: shadowcast::vision_distance::Circle =
@@ -27,6 +29,7 @@ pub enum VisibilityAlgorithm {
     Omniscient,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct VisibilityGrid {
     grid: Grid<VisibilityCell>,
     count: u64,
@@ -87,7 +90,7 @@ impl VisibilityGrid {
     }
 }
 
-
+#[derive(Serialize, Deserialize)]
 struct VisibilityCell {
     last_seen: u64,
 }
