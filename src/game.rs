@@ -40,6 +40,7 @@ impl GameState {
     ) -> Self {
         let mut world = World::new(screen_size);
         let mut rng = Isaac64Rng::seed_from_u64(rng_seed);
+        println!("RNG: {:?}", rng);
         let Populate {
             player_entity,
             ai_state,

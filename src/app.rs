@@ -18,6 +18,7 @@ use chargrid::{
 };
 use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
+use maplit::hashmap;
 use rgb24::Rgb24;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -72,6 +73,9 @@ struct AppData {
     visibility_algorithm: VisibilityAlgorithm,
     cursor: Option<Coord>,
     until_next_animation_tick: Duration,
+    main_menu: MenuInstanceChooseOrEscape<MainMenuEntry>,
+    game_area_size: Size,
+    rng_seed: u64,
 }
 
 impl AppData {
@@ -106,6 +110,9 @@ impl AppData {
             visibility_algorithm,
             cursor: None,
             until_next_animation_tick: Duration::from_millis(0),
+            main_menu: main_menu_instance(),
+            game_area_size,
+            rng_seed,
         }
     }
 
@@ -138,7 +145,7 @@ impl AppData {
                         }
                         return Some(GameReturn::Examine);
                     }
-                    keys::ESCAPE => return Some(GameReturn::Exit),
+                    keys::ESCAPE => return Some(GameReturn::Menu),
                     _ => (),
                 }
                 self.cursor = None;
@@ -154,6 +161,15 @@ impl AppData {
         }
         None
     }
+
+    fn new_game(&mut self) {
+        self.rng_seed = self.rng_seed.wrapping_add(1);
+        self.game_state = GameState::new(
+            self.game_area_size,
+            self.rng_seed,
+            self.visibility_algorithm,
+        );
+    }
 }
 
 
@@ -163,6 +179,7 @@ struct AppView {
     game_view: GameView,
     inventory_slot_menu_view: InventorySlotMenuView,
     ui_view: UiView,
+    main_menu_view: MainMenuView,
 }
 
 impl AppView {
@@ -174,6 +191,7 @@ impl AppView {
             game_view: GameView::default(),
             inventory_slot_menu_view: InventorySlotMenuView::default(),
             ui_view: UiView::default(),
+            main_menu_view: MainMenuView::default(),
         }
     }
 
@@ -218,8 +236,26 @@ fn game_loop() -> impl EventRoutine<Return = (), Data = AppData, View = AppView,
     make_either!(Ei = A | B | C | D | E);
     Loop::new(|| {
         GameEventRoutine.and_then(|game_return| match game_return {
-            GameReturn::Exit => Ei::A(Value::new(Some(()))),
-            GameReturn::GameOver => Ei::B(game_over().map(|()| Some(()))),
+            GameReturn::Menu => Ei::A(main_menu().and_then(|choice| {
+                make_either!(Ei = A | B);
+                match choice {
+                    Err(menu::Escape) => Ei::A(Value::new(None)),
+                    Ok(MainMenuEntry::Resume) => Ei::A(Value::new(None)),
+                    Ok(MainMenuEntry::Quit) => Ei::A(Value::new(Some(()))),
+                    Ok(MainMenuEntry::NewGame) => {
+                        Ei::B(SideEffect::new_with_view(|data: &mut AppData, _: &_| {
+                            data.new_game();
+                            None
+                        }))
+                    }
+                }
+            })),
+            GameReturn::GameOver => Ei::B(game_over().and_then(|()| {
+                SideEffect::new_with_view(|data: &mut AppData, _: &_| {
+                    data.new_game();
+                    None
+                })
+            })),
             GameReturn::UseItem => Ei::C(use_item().map(|_| None)),
             GameReturn::DropItem => Ei::D(drop_item().map(|_| None)),
             GameReturn::Examine => Ei::E(TargetEventRoutine { name: "EXAMINE" }.map(|_| None)),
@@ -508,11 +544,11 @@ fn inventory_slot_menu<'a>(title: &'a str,) -> impl 'a
 struct GameEventRoutine;
 
 enum GameReturn {
-    Exit,
     UseItem,
     DropItem,
     GameOver,
     Examine,
+    Menu,
 }
 
 impl EventRoutine for GameEventRoutine {
@@ -751,3 +787,160 @@ impl EventRoutine for TargetEventRoutine {
         view.render_ui(Some(self.name), &data, context, frame);
     }
 }
+
+
+#[derive(Clone, Copy, Debug)]
+enum MainMenuEntry {
+    NewGame,
+    Resume,
+    Quit,
+}
+
+fn main_menu_instance() -> MenuInstanceChooseOrEscape<MainMenuEntry> {
+    use MainMenuEntry::*;
+    MenuInstanceBuilder {
+        items: vec![Resume, NewGame, Quit],
+        hotkeys: Some(hashmap!['r' => Resume, 'n' => NewGame, 'q' => Quit]),
+        selected_index: 0,
+    }.build()
+        .unwrap()
+        .into_choose_or_escape()
+}
+
+#[derive(Default)]
+struct MainMenuView {
+    mouse_tracker: MenuInstanceMouseTracker,
+}
+
+impl MenuIndexFromScreenCoord for MainMenuView {
+    fn menu_index_from_screen_coord(&self, len: usize, coord: Coord) -> Option<usize> {
+        self.mouse_tracker.menu_index_from_screen_coord(len, coord)
+    }
+}
+
+
+impl<'a> View<&'a AppData> for MainMenuView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        data: &'a AppData,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        self.mouse_tracker.new_frame(context.offset);
+        for (i, &entry, maybe_selected) in data.main_menu.menu_instance().enumerate() {
+            let (prefix, style) = if maybe_selected.is_some() {
+                (
+                    ">",
+                    Style::new()
+                        .with_foreground(Rgb24::new_grey(255))
+                        .with_bold(true),
+                )
+            } else {
+                (" ", Style::new().with_foreground(Rgb24::new_grey(187)))
+            };
+            let text = match entry {
+                MainMenuEntry::Resume => "(r) Resume",
+                MainMenuEntry::NewGame => "(n) New Game",
+                MainMenuEntry::Quit => "(q) Quit",
+            };
+            let size = StringViewSingleLine::new(style).view_size(
+                format!("{} {}", prefix, text),
+                context.add_offset(Coord::new(0, i as i32)),
+                frame,
+            );
+            self.mouse_tracker.on_entry_view_size(size);
+        }
+    }
+}
+
+
+struct MainMenuSelect;
+
+impl ChooseSelector for MainMenuSelect {
+    type ChooseOutput = MenuInstanceChooseOrEscape<MainMenuEntry>;
+    fn choose_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::ChooseOutput {
+        &mut input.main_menu
+    }
+}
+
+impl DataSelector for MainMenuSelect {
+    type DataInput = AppData;
+    type DataOutput = AppData;
+    fn data<'a>(&self, input: &'a Self::DataInput) -> &'a Self::DataOutput {
+        input
+    }
+    fn data_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::DataOutput {
+        input
+    }
+}
+
+impl ViewSelector for MainMenuSelect {
+    type ViewInput = AppView;
+    type ViewOutput = MainMenuView;
+    fn view<'a>(&self, input: &'a Self::ViewInput) -> &'a Self::ViewOutput {
+        &input.main_menu_view
+    }
+    fn view_mut<'a>(&self, input: &'a mut Self::ViewInput) -> &'a mut Self::ViewOutput {
+        &mut input.main_menu_view
+    }
+}
+
+
+struct MainMenuDecorate;
+
+impl Decorate for MainMenuDecorate {
+    type View = AppView;
+    type Data = AppData;
+    fn view<E, F, C>(
+        &self,
+        data: &Self::Data,
+        mut event_routine_view: EventRoutineView<E>,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) where
+        E: EventRoutine<Data = Self::Data, View = Self::View>,
+        F: Frame,
+        C: ColModify,
+    {
+        BoundView {
+            size: data.game_state.size(),
+            view: AlignView {
+                alignment: Alignment::centre(),
+                view: FillBackgroundView {
+                    rgb24: Rgb24::new_grey(0),
+                    view: BorderView {
+                        style: &BorderStyle {
+                            title: None,
+                            title_style: Style::new().with_foreground(Rgb24::new_grey(255)),
+                            ..Default::default()
+                        },
+                        view: MinSizeView {
+                            size: Size::new(12, 0),
+                            view: &mut event_routine_view,
+                        },
+                    },
+                },
+            },
+        }.view(data, context.add_depth(10), frame);
+        event_routine_view.view.game_view.view(
+            &data.game_state,
+            context.compose_col_modify(ColModifyMap(|c: Rgb24| c.saturating_scalar_mul_div(1, 2))),
+            frame,
+        );
+        event_routine_view
+            .view
+            .render_ui(None, &data, context, frame);
+    }
+}
+
+fn main_menu() -> impl EventRoutine<
+    Return = Result<MainMenuEntry, menu::Escape>,
+    Data = AppData,
+    View = AppView,
+    Event = CommonEvent,
+> {
+    MenuInstanceRoutine::new(MainMenuSelect)
+        .convert_input_to_common_event()
+        .decorated(MainMenuDecorate)
+}
+        
