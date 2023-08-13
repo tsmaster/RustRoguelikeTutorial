@@ -21,9 +21,6 @@ pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
     const NPCS_PER_ROOM_DISTRIBUTION: &[usize] =
         &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4];
 
-    const HEALTH_POTIONS_PER_ROOM_DISTRIBUTION: &[usize] =
-        &[0, 0, 1, 1, 1, 1, 1, 2, 2];
-    
     const ITEMS_PER_ROOM_DISTRIBUTION: &[usize] =
         &[0, 0, 1, 1, 1, 1, 1, 2, 2];
 
@@ -135,21 +132,6 @@ impl Room {
                 NpcType::Troll
             };
             *grid.get_checked_mut(coord) = Some(TerrainTile::Npc(npc_type));
-        }
-    }
-
-    fn place_health_potions<R: Rng>(
-        &self,
-        n: usize,
-        grid: &mut Grid<Option<TerrainTile>>,
-        rng: &mut R,
-    ) {
-        for coord in self
-            .coords()
-            .filter(|&coord| grid.get_checked(coord).unwrap() == TerrainTile::Floor)
-            .choose_multiple(rng, n)
-        {
-            *grid.get_checked_mut(coord) = Some(TerrainTile::Item(ItemType::HealthPotion));
         }
     }
 
