@@ -32,6 +32,7 @@ entity_table::declare_entity_module! {
         inventory: Inventory,
         trajectory: CardinalStepIter,
         projectile: ProjectileType,
+        confusion_countdown: u32,
     }
 }
 
@@ -200,6 +201,8 @@ impl World {
     pub fn move_projectiles(&mut self, message_log: &mut Vec<LogMessage>) {
         let mut entities_to_remove = Vec::new();
         let mut fireball_hit = Vec::new();
+        let mut confusion_hit = Vec::new();
+        
         for (entity, trajectory) in self.components.trajectory.iter_mut() {
             if let Some(direction) = trajectory.next() {
                 let current_coord = self.spatial_table.coord_of(entity).unwrap();
@@ -213,6 +216,9 @@ impl World {
                         match projectile_type {
                             ProjectileType::Fireball => {
                                 fireball_hit.push(character);
+                            }
+                            ProjectileType::Confusion => {
+                                confusion_hit.push(character);
                             }
                         }
                     }
@@ -233,6 +239,12 @@ impl World {
                 if let Some(npc) = maybe_npc {
                     message_log.push(LogMessage::NpcDies(npc));
                 }
+            }
+        }
+        for entity in confusion_hit {
+            self.components.confusion_countdown.insert(entity, 5);
+            if let Some(&npc_type) = self.components.npc_type.get(entity) {
+                message_log.push(LogMessage::NpcBecomesConfused(npc_type));
             }
         }
     }
@@ -272,16 +284,34 @@ impl World {
 
     }
 
-    pub fn maybe_move_character(
+    pub fn maybe_move_character<R: Rng>(
         &mut self,
         character_entity: Entity,
         direction: CardinalDirection,
         message_log: &mut Vec<LogMessage>,
+        rng: &mut R,
     ) {
         let player_coord = self
             .spatial_table
             .coord_of(character_entity)
             .expect("player has no coord");
+        let direction = if let Some(confusion_countdown) = self
+            .components
+            .confusion_countdown
+            .get_mut(character_entity)
+        {
+            if *confusion_countdown == 0 {
+                self.components.confusion_countdown.remove(character_entity);
+                if let Some(&npc_type) = self.components.npc_type.get(character_entity) {
+                    message_log.push(LogMessage::NpcIsNoLongerConfused(npc_type));
+                }
+            } else {
+                *confusion_countdown -= 1;
+            }
+            rng.gen()
+        } else {
+            direction
+        };
         let new_player_coord = player_coord + direction.coord();
         if new_player_coord.is_valid(self.spatial_table.grid_size()) {
             let dest_layers = self.spatial_table.layers_at_checked(new_player_coord);
@@ -371,10 +401,11 @@ impl World {
                     .expect("character has no hit points");
                 const HEALTH_TO_HEAL: u32 = 5;
                 hit_points.current = hit_points.max.min(hit_points.current + HEALTH_TO_HEAL);
+                inventory.remove(inventory_index).unwrap();
                 message_log.push(LogMessage::PlayerHeals);
                 ItemUsage::Immediate
             }
-            ItemType::FireballScroll => ItemUsage::Aim
+            ItemType::FireballScroll | ItemType::ConfusionScroll => ItemUsage::Aim
         };
         Ok(usage)
     }
@@ -404,6 +435,12 @@ impl World {
                     ProjectileType::Fireball,
                 ));
                 self.spawn_projectile(character_coord, target, ProjectileType::Fireball);
+            }
+            ItemType::ConfusionScroll => {
+                message_log.push(LogMessage::PlayerLaunchesProjectile(
+                    ProjectileType::Confusion,
+                ));
+                self.spawn_projectile(character_coord, target, ProjectileType::Confusion);
             }
         }
         Ok(())
@@ -628,6 +665,7 @@ struct VictimDies;
 pub enum ItemType {
     HealthPotion,
     FireballScroll,
+    ConfusionScroll,
 }
 
 impl ItemType {
@@ -635,6 +673,7 @@ impl ItemType {
         match self {
             Self::HealthPotion => "health potion",
             Self::FireballScroll => "fireball scroll",
+            Self::ConfusionScroll => "confusion scroll",
         }
     }
 }
@@ -695,12 +734,14 @@ pub enum ItemUsage {
 #[derive(Clone, Copy, Debug)]
 pub enum ProjectileType {
     Fireball,
+    Confusion,
 }
 
 impl ProjectileType {
     pub fn name(self) -> &'static str {
         match self {
             Self::Fireball => "fireball",
+            Self::Confusion => "confusion spell",
         }
     }
 }

@@ -47,10 +47,6 @@ pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
             let &num_npcs = NPCS_PER_ROOM_DISTRIBUTION.choose(rng).unwrap();
             room.place_npcs(num_npcs, &mut grid, rng);
 
-            // Add health potions to the room
-            //let &num_health_potions = HEALTH_POTIONS_PER_ROOM_DISTRIBUTION.choose(rng).unwrap();
-            //room.place_health_potions(num_health_potions, &mut grid, rng);
-
             // Add items to the room
             let &num_items = ITEMS_PER_ROOM_DISTRIBUTION.choose(rng).unwrap();
             room.place_items(num_items, &mut grid, rng);
@@ -169,7 +165,8 @@ impl Room {
             .choose_multiple(rng, n)
         {
             let item = match rng.gen_range(0..100) {
-                0..=100 => ItemType::FireballScroll,
+                0..=29 => ItemType::FireballScroll,
+                30..=49 => ItemType::ConfusionScroll,
                 _ => ItemType::HealthPotion,
             };
             *grid.get_checked_mut(coord) = Some(TerrainTile::Item(item));

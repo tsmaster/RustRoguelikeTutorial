@@ -27,6 +27,7 @@ pub struct GameState {
     ai_state: ComponentTable<Agent>,
     behavior_context: BehaviorContext,
     message_log: Vec<LogMessage>,
+    rng: Isaac64Rng,
 }
 
 impl GameState {
@@ -52,6 +53,7 @@ impl GameState {
             ai_state,
             behavior_context,
             message_log: Vec::new(),
+            rng,
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
@@ -85,7 +87,11 @@ impl GameState {
             return;
         }
         self.world
-            .maybe_move_character(self.player_entity, direction, &mut self.message_log);
+            .maybe_move_character(
+                self.player_entity,
+                direction,
+                &mut self.message_log,
+                &mut self.rng);
         self.ai_turn();
     }
 
@@ -175,7 +181,12 @@ impl GameState {
                 &mut self.behavior_context);
             match npc_action {
                 NpcAction::Wait => (),
-                NpcAction::Move(direction) => self.world.maybe_move_character(entity, direction, &mut self.message_log),
+                NpcAction::Move(direction) => self.world.maybe_move_character(
+                    entity,
+                    direction,
+                    &mut self.message_log,
+                    &mut self.rng,
+                ),
             }
         }
     }
@@ -246,6 +257,8 @@ pub enum LogMessage {
     NoSpaceToDropItem,
     PlayerLaunchesProjectile(ProjectileType),
     NpcDies(NpcType),
+    NpcBecomesConfused(NpcType),
+    NpcIsNoLongerConfused(NpcType),
 }
 
 #[derive(Clone, Copy, Debug)]
