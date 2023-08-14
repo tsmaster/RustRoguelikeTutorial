@@ -311,6 +311,8 @@ pub enum LogMessage {
     NpcDies(NpcType),
     NpcBecomesConfused(NpcType),
     NpcIsNoLongerConfused(NpcType),
+    PlayerDodges(NpcType),
+    NpcDodges(NpcType),
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -64,8 +64,8 @@ pub mod colors {
 
     pub fn projectile_color(projectile_type: ProjectileType) -> Rgb24 {
         match projectile_type {
-            ProjectileType::Fireball => FIREBALL_SCROLL,
-            ProjectileType::Confusion => CONFUSION_SCROLL,
+            ProjectileType::Fireball { .. } => FIREBALL_SCROLL,
+            ProjectileType::Confusion { .. } => CONFUSION_SCROLL,
         }
     }
 }
@@ -372,10 +372,10 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
         Tile::Item(ItemType::ConfusionScroll) => ViewCell::new()
             .with_character('?')
             .with_foreground(colors::CONFUSION_SCROLL),
-        Tile::Projectile(ProjectileType::Fireball) => ViewCell::new()
+        Tile::Projectile(ProjectileType::Fireball { .. }) => ViewCell::new()
             .with_character('*')
             .with_foreground(colors::FIREBALL_SCROLL),
-        Tile::Projectile(ProjectileType::Confusion) => ViewCell::new()
+        Tile::Projectile(ProjectileType::Confusion { .. }) => ViewCell::new()
             .with_character('*')
             .with_foreground(colors::CONFUSION_SCROLL),
         Tile::Stairs => ViewCell::new()

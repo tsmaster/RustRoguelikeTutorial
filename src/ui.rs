@@ -259,6 +259,18 @@ impl<'a> View<&'a [LogMessage]> for MessagesView {
                     buf[1].style.foreground = Some(colors::npc_color(npc_type));
                     write!(&mut buf[2].text, "'s confusion passes.").unwrap();
                 }
+                PlayerDodges(npc_type) => {
+                    write!(&mut buf[0].text, "You dodge the ").unwrap();
+                    write!(&mut buf[1].text, "{}'s", npc_type.name()).unwrap();
+                    buf[1].style.foreground = Some(colors::npc_color(npc_type));
+                    write!(&mut buf[2].text, " attack.").unwrap();
+                }
+                NpcDodges(npc_type) => {
+                    write!(&mut buf[0].text, "The ").unwrap();
+                    write!(&mut buf[1].text, "{}", npc_type.name()).unwrap();
+                    buf[1].style.foreground = Some(colors::npc_color(npc_type));
+                    write!(&mut buf[2].text, " dodges your attack.").unwrap();
+                }                    
             }
         }
 
