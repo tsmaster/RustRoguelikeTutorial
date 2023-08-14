@@ -151,6 +151,29 @@ impl GameState {
         result
     }
 
+    pub fn maybe_player_descend(&mut self) {
+        if self.world.coord_contains_stairs(self.player_coord()) {
+            self.player_descend();
+        }
+    }
+
+    fn player_descend(&mut self) {
+        let player_data = self.world.remove_character(self.player_entity);
+        self.world.clear();
+        self.visibility_grid.clear();
+
+        let Populate {
+            player_entity,
+            ai_state,
+        } = self.world.populate(&mut self.rng);
+
+        self.world.replace_character(player_entity, player_data);
+
+        self.player_entity = player_entity;
+
+        self.ai_state = ai_state;
+    }
+
     pub fn player_inventory(&self) -> &Inventory {
         self.world
             .inventory(self.player_entity)

@@ -149,6 +149,7 @@ impl AppData {
                         }
                         return Some(GameReturn::Examine);
                     }
+                    KeyboardInput::Char('>') => self.game_state.maybe_player_descend(),
                     keys::ESCAPE => return Some(GameReturn::Menu),
                     _ => (),
                 }

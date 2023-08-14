@@ -11,6 +11,7 @@ use crate::behavior::Agent;
 use crate::game::{ExamineCell, LogMessage};
 use crate::terrain::{self, TerrainTile};
 
+pub use components::EntityData;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Tile {
@@ -78,6 +79,78 @@ impl World {
             components,
             spatial_table,
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.entity_allocator.clear();
+        self.components.clear();
+        self.spatial_table.clear();
+    }
+
+    fn remove_entity_data(&mut self, entity: Entity) -> EntityData {
+        self.entity_allocator.free(entity);
+        self.spatial_table.remove(entity);
+        self.components.remove_entity_data(entity)
+    }
+
+    pub fn remove_character(&mut self, entity: Entity) -> CharacterData {
+        let mut entity_data = self.remove_entity_data(entity);
+
+        // Remove the inventory from the character. An inventory
+        // contains entities referring data in the current
+        // world. These data will also be removed here, and combined
+        // with the `EntityData` of the character to form a
+        // `CharacterData`. When the `CharacterData` is re-inserted
+        // into the world, the inventory item data will be inserted
+        // first, at which point each item will be assigned a fresh
+        // entity. The character will get a brand new inventory
+        // containing the new entities.
+
+        let inventory_entity_data = entity_data
+            .inventory
+            .take()
+            .expect("character missing inventory")
+            .slots()
+            .iter()
+            .map(|maybe_slot| maybe_slot.map(|entity| self.remove_entity_data(entity)))
+            .collect::<Vec<_>>();
+        CharacterData {
+            entity_data,
+            inventory_entity_data,
+        }
+    }
+
+    pub fn replace_character(
+        &mut self,
+        entity: Entity,
+        CharacterData {
+            mut entity_data,
+            inventory_entity_data,
+        }: CharacterData,
+    ) {
+        let inventory_slots = inventory_entity_data
+            .into_iter()
+            .map(|maybe_entity_data| {
+                maybe_entity_data.map(|entity_data| {
+                    let entity = self.entity_allocator.alloc();
+                    self.components.update_entity_data(entity, entity_data);
+                    entity
+                })
+            })
+            .collect::<Vec<_>>();
+
+        entity_data.inventory = Some(Inventory {
+            slots: inventory_slots,
+        });
+        self.components.update_entity_data(entity, entity_data);
+    }
+
+    pub fn coord_contains_stairs(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at_checked(coord)
+            .floor
+            .map(|floor_entity| self.components.stairs.contains(floor_entity))
+            .unwrap_or(false)
     }
 
     pub fn size(&self) -> Size {
@@ -764,3 +837,9 @@ impl ProjectileType {
         }
     }
 }
+
+pub struct CharacterData {
+    entity_data: EntityData,
+    inventory_entity_data: Vec<Option<EntityData>>,
+}
+
