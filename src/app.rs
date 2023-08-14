@@ -371,6 +371,11 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
         Tile::Projectile(ProjectileType::Confusion) => ViewCell::new()
             .with_character('*')
             .with_foreground(colors::CONFUSION_SCROLL),
+        Tile::Stairs => ViewCell::new()
+            .with_character('>')
+            .with_bold(true)
+            .with_foreground(Rgb24::new_grey(255))
+            .with_background(Rgb24::new(0, 0, 63)),
     }
 }
 

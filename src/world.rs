@@ -22,6 +22,7 @@ pub enum Tile {
     NpcCorpse(NpcType),
     Item(ItemType),
     Projectile(ProjectileType),
+    Stairs,
 }
 
 entity_table::declare_entity_module! {
@@ -34,6 +35,7 @@ entity_table::declare_entity_module! {
         trajectory: CardinalStepIter,
         projectile: ProjectileType,
         confusion_countdown: u32,
+        stairs: (),
     }
 }
 
@@ -200,6 +202,20 @@ impl World {
             .insert(entity, CardinalStepIter::new(to - from));
     }
 
+    fn spawn_stairs(&mut self, coord: Coord) {
+        let entity = self.entity_allocator.alloc();
+        self.spatial_table
+            .update(
+                entity,
+                Location {
+                    coord,
+                    layer: Some(Layer::Floor),
+                },
+            ).unwrap();
+        self.components.tile.insert(entity, Tile::Stairs);
+        self.components.stairs.insert(entity, ());
+    }
+
     pub fn move_projectiles(&mut self, message_log: &mut Vec<LogMessage>) {
         let mut entities_to_remove = Vec::new();
         let mut fireball_hit = Vec::new();
@@ -277,6 +293,7 @@ impl World {
                     self.spawn_item(coord, item_type);
                     self.spawn_floor(coord);
                 }
+                TerrainTile::Stairs => self.spawn_stairs(coord),
             }
         }
         Populate {
