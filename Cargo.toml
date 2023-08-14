@@ -11,6 +11,7 @@ chargrid_graphical = "0.7"
 coord_2d = { version = "0.3", features = ["serialize"] }
 direction = { version = "0.18", features = ["rand", "serialize"] }
 entity_table = { version = "0.2", features = ["serialize"] }
+general_storage_file = { version = "0.1", features = ["json", "compress"] }
 grid_2d = { version = "0.15", features = ["serialize"] }
 grid_search_cardinal = { version = "0.3", features = ["serialize"] }
 line_2d = { version = "0.5", features = ["serialize"] }
