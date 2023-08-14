@@ -24,7 +24,7 @@ use rgb24::Rgb24;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::game::GameState;
+use crate::game::{GameState, LevelUp};
 use crate::ui::{StatsData, UiData, UiView};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm};
 use crate::world::{ItemType, ItemUsage, Layer, NpcType, ProjectileType, Tile};
@@ -80,6 +80,8 @@ struct AppData {
     main_menu: MenuInstanceChooseOrEscape<MainMenuEntry>,
     game_area_size: Size,
     rng_seed: u64,
+    level_up_menu: MenuInstanceChooseOrEscape<LevelUp>,
+    
 }
 
 impl AppData {
@@ -117,6 +119,7 @@ impl AppData {
             main_menu: main_menu_instance(),
             game_area_size,
             rng_seed,
+            level_up_menu: level_up_menu_instance(),
         }
     }
 
@@ -149,7 +152,11 @@ impl AppData {
                         }
                         return Some(GameReturn::Examine);
                     }
-                    KeyboardInput::Char('>') => self.game_state.maybe_player_descend(),
+                    KeyboardInput::Char('>') => {
+                        if self.game_state.is_player_on_stairs() {
+                            return Some(GameReturn::LevelUpAndDescend);
+                        }
+                    }
                     keys::ESCAPE => return Some(GameReturn::Menu),
                     _ => (),
                 }
@@ -165,6 +172,11 @@ impl AppData {
             return Some(GameReturn::GameOver);
         }
         None
+    }
+
+    fn player_level_up_and_descend(&mut self, level_up: LevelUp) {
+        self.game_state.player_level_up_and_descend(level_up);
+        self.game_state.update_visibility(self.visibility_algorithm);
     }
 
     fn new_game(&mut self) {
@@ -226,6 +238,7 @@ struct AppView {
     inventory_slot_menu_view: InventorySlotMenuView,
     ui_view: UiView,
     main_menu_view: MainMenuView,
+    level_up_menu_view: LevelUpMenuView,
 }
 
 impl AppView {
@@ -238,6 +251,7 @@ impl AppView {
             inventory_slot_menu_view: InventorySlotMenuView::default(),
             ui_view: UiView::default(),
             main_menu_view: MainMenuView::default(),
+            level_up_menu_view: LevelUpMenuView::default(),
         }
     }
 
@@ -285,7 +299,7 @@ impl AppView {
 
 fn game_loop() -> impl EventRoutine<Return = (), Data = AppData, View = AppView, Event = CommonEvent>
 {
-    make_either!(Ei = A | B | C | D | E);
+    make_either!(Ei = A | B | C | D | E | F);
     Loop::new(|| {
         GameEventRoutine.and_then(|game_return| match game_return {
             GameReturn::Menu => Ei::A(main_menu().and_then(|choice| {
@@ -316,6 +330,15 @@ fn game_loop() -> impl EventRoutine<Return = (), Data = AppData, View = AppView,
             GameReturn::UseItem => Ei::C(use_item().map(|_| None)),
             GameReturn::DropItem => Ei::D(drop_item().map(|_| None)),
             GameReturn::Examine => Ei::E(TargetEventRoutine { name: "EXAMINE" }.map(|_| None)),
+            GameReturn::LevelUpAndDescend => Ei::F(level_up_menu().and_then(|maybe_level_up| {
+                SideEffect::new_with_view(move |data: &mut AppData, _: &_| {
+                    match maybe_level_up {
+                        Err(menu::Escape) => (),
+                        Ok(level_up) => data.player_level_up_and_descend(level_up),
+                    }
+                    None
+                })
+            })),
         })
     }).return_on_exit(|data| data.save_game())
 }
@@ -611,6 +634,7 @@ enum GameReturn {
     GameOver,
     Examine,
     Menu,
+    LevelUpAndDescend,
 }
 
 impl EventRoutine for GameEventRoutine {
@@ -1004,4 +1028,154 @@ fn main_menu() -> impl EventRoutine<
     MenuInstanceRoutine::new(MainMenuSelect)
         .convert_input_to_common_event()
         .decorated(MainMenuDecorate)
+}
+
+fn level_up_menu_instance() -> MenuInstanceChooseOrEscape<LevelUp> {
+    use LevelUp::*;
+    MenuInstanceBuilder {
+        items: vec![Strength, Dexterity, Intelligence, Health],
+        hotkeys: None,
+        selected_index: 0,
+    }
+    .build()
+        .unwrap()
+        .into_choose_or_escape()
+}
+
+#[derive(Default)]
+struct LevelUpMenuView {
+    mouse_tracker: MenuInstanceMouseTracker,
+}
+
+impl MenuIndexFromScreenCoord for LevelUpMenuView {
+    fn menu_index_from_screen_coord(&self, len: usize, coord: Coord) -> Option<usize> {
+        self.mouse_tracker.menu_index_from_screen_coord(len, coord)
+    }
+}
+
+impl<'a> View<&'a AppData> for LevelUpMenuView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        data: &'a AppData,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        self.mouse_tracker.new_frame(context.offset);
+        for (i, &level_up, maybe_selected) in data.level_up_menu.menu_instance().enumerate() {
+            let (prefix, style) = if maybe_selected.is_some() {
+                (
+                    ">",
+                    Style::new()
+                        .with_foreground(Rgb24::new_grey(255))
+                        .with_bold(true),
+                )
+            } else {
+                (" ", Style::new().with_foreground(Rgb24::new_grey(187)))
+            };
+            let text = match level_up {
+                LevelUp::Strength => "Strength",
+                LevelUp::Dexterity => "Dexterity",
+                LevelUp::Intelligence => "Intelligence",
+                LevelUp::Health => "Constitution",
+            };
+            let size = StringViewSingleLine::new(style).view_size(
+                format!("{} {}", prefix, text),
+                context.add_offset(Coord::new(0, i as i32)),
+                frame,
+            );
+            self.mouse_tracker.on_entry_view_size(size);
+        }
+    }
+}
+
+
+struct LevelUpMenuSelect;
+
+impl ChooseSelector for LevelUpMenuSelect {
+    type ChooseOutput = MenuInstanceChooseOrEscape<LevelUp>;
+    fn choose_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::ChooseOutput {
+        &mut input.level_up_menu
+    }
+}
+
+impl DataSelector for LevelUpMenuSelect {
+    type DataInput = AppData;
+    type DataOutput = AppData;
+    fn data<'a>(&self, input: &'a Self::DataInput) -> &'a Self::DataOutput {
+        input
+    }
+    fn data_mut<'a>(&self, input: &'a mut Self::DataInput) -> &'a mut Self::DataOutput {
+        input
+    }
+}
+
+impl ViewSelector for LevelUpMenuSelect {
+    type ViewInput = AppView;
+    type ViewOutput = LevelUpMenuView;
+    fn view<'a>(&self, input: &'a Self::ViewInput) -> &'a Self::ViewOutput {
+        &input.level_up_menu_view
+    }
+    fn view_mut<'a>(&self, input: &'a mut Self::ViewInput) -> &'a mut Self::ViewOutput {
+        &mut input.level_up_menu_view
+    }
+}
+
+
+struct LevelUpMenuDecorate;
+
+impl Decorate for LevelUpMenuDecorate {
+    type View = AppView;
+    type Data = AppData;
+    fn view<E, F, C>(
+        &self,
+        data: &Self::Data,
+        mut event_routine_view: EventRoutineView<E>,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) where
+        E: EventRoutine<Data = Self::Data, View = Self::View>,
+        F: Frame,
+        C: ColModify,
+    {
+        BoundView {
+            size: data.game_state.size(),
+            view: AlignView {
+                alignment: Alignment::centre(),
+                view: FillBackgroundView {
+                    rgb24: Rgb24::new_grey(0),
+                    view: BorderView {
+                        style: &BorderStyle {
+                            title: Some("Level Up".to_string()),
+                            title_style: Style::new().with_foreground(Rgb24::new_grey(255)),
+                            ..Default::default()
+                        },
+                        view: MinSizeView {
+                            size: Size::new(12, 0),
+                            view: &mut event_routine_view,
+                        },
+                    },
+                },
+            },
+        }.view(data, context.add_depth(10), frame);
+        event_routine_view.view.game_view.view(
+            &data.game_state,
+            context.compose_col_modify(ColModifyMap(|c: Rgb24| c.saturating_scalar_mul_div(1, 2))),
+            frame,
+        );
+        event_routine_view
+            .view
+            .render_ui(None, &data, context, frame);
+    }
+}
+
+
+fn level_up_menu() -> impl EventRoutine<
+    Return = Result<LevelUp, menu::Escape>,
+    Data = AppData,
+    View = AppView,
+    Event = CommonEvent,
+> {
+    MenuInstanceRoutine::new(LevelUpMenuSelect)
+        .convert_input_to_common_event()
+        .decorated(LevelUpMenuDecorate)
 }

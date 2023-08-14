@@ -8,7 +8,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::behavior::Agent;
-use crate::game::{ExamineCell, LogMessage};
+use crate::game::{ExamineCell, LevelUp, LogMessage};
 use crate::terrain::{self, TerrainTile};
 
 pub use components::EntityData;
@@ -613,6 +613,42 @@ impl World {
             .expect("non-item in inventory");
         message_log.push(LogMessage::PlayerDrops(item_type));
         Ok(())
+    }
+
+    pub fn level_up_character(&mut self, character_entity: Entity, level_up: LevelUp) {
+        match level_up {
+            LevelUp::Strength => {
+                *self
+                    .components
+                    .strength
+                    .get_mut(character_entity)
+                    .expect("character lacks strength") += 1;
+            }
+            LevelUp::Dexterity => {
+                *self
+                    .components
+                    .dexterity
+                    .get_mut(character_entity)
+                    .expect("character lacks dexterity") += 1;
+            }
+            LevelUp::Intelligence => {
+                *self
+                    .components
+                    .intelligence
+                    .get_mut(character_entity)
+                    .expect("character lacks intelligence") += 1;
+            }
+            LevelUp::Health => {
+                let hit_points = self
+                    .components
+                    .hit_points
+                    .get_mut(character_entity)
+                    .expect("character lacks hit points");
+                const INCREASE: u32 = 5;
+                hit_points.current += INCREASE;
+                hit_points.max += INCREASE;
+            }
+        }
     }
 
 
