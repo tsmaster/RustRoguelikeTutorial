@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::game::GameState;
-use crate::ui::{UiData, UiView};
+use crate::ui::{StatsData, UiData, UiView};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm};
 use crate::world::{ItemType, ItemUsage, Layer, NpcType, ProjectileType, Tile};
 
@@ -230,7 +230,7 @@ struct AppView {
 
 impl AppView {
     fn new(screen_size: Size) -> Self {
-        const UI_Y_PADDING: u32 = 1;
+        const UI_Y_PADDING: u32 = 0;
         let ui_y_offset = (screen_size.height() - UI_NUM_ROWS + UI_Y_PADDING) as i32;
         Self {
             ui_y_offset,
@@ -268,7 +268,13 @@ impl AppView {
                 player_hit_points,
                 messages,
                 name,
-                examine_cell
+                examine_cell,
+                stats_data: StatsData {
+                    strength: data.game_state.player_strength(),
+                    dexterity: data.game_state.player_dexterity(),
+                    intelligence: data.game_state.player_intelligence(),
+                },
+                dungeon_level: data.game_state.dungeon_level(),
             },
             context.add_offset(Coord::new(0, self.ui_y_offset)),
             frame,
@@ -999,4 +1005,3 @@ fn main_menu() -> impl EventRoutine<
         .convert_input_to_common_event()
         .decorated(MainMenuDecorate)
 }
-        

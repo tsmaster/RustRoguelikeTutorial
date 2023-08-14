@@ -37,6 +37,10 @@ entity_table::declare_entity_module! {
         projectile: ProjectileType,
         confusion_countdown: u32,
         stairs: (),
+        base_damage: i32,
+        strength: i32,
+        dexterity: i32,
+        intelligence: i32,
     }
 }
 
@@ -188,6 +192,10 @@ impl World {
         self.components
             .inventory.
             insert(entity, Inventory::new(10));
+        self.components.base_damage.insert(entity, 1);
+        self.components.strength.insert(entity, 1);
+        self.components.dexterity.insert(entity, 1);
+        self.components.intelligence.insert(entity, 1);
 
         entity
     }
@@ -253,6 +261,14 @@ impl World {
         self.components.tile.insert(entity, Tile::Npc(npc_type));
         self.components.npc_type.insert(entity, npc_type);
         self.components.hit_points.insert(entity, hit_points);
+        self.components.base_damage.insert(entity, 1);
+        let (strength, dexterity) = match npc_type {
+            NpcType::Orc => (1, 1),
+            NpcType::Troll => (2, 0),
+        };
+        self.components.strength.insert(entity, strength);
+        self.components.dexterity.insert(entity, dexterity);
+
         entity
     }
 
@@ -293,7 +309,7 @@ impl World {
         let mut entities_to_remove = Vec::new();
         let mut fireball_hit = Vec::new();
         let mut confusion_hit = Vec::new();
-        
+
         for (entity, trajectory) in self.components.trajectory.iter_mut() {
             if let Some(direction) = trajectory.next() {
                 let current_coord = self.spatial_table.coord_of(entity).unwrap();
@@ -338,6 +354,18 @@ impl World {
                 message_log.push(LogMessage::NpcBecomesConfused(npc_type));
             }
         }
+    }
+
+    pub fn strength(&self, entity: Entity) -> Option<i32> {
+        self.components.strength.get(entity).cloned()
+    }
+
+    pub fn dexterity(&self, entity: Entity) -> Option<i32> {
+        self.components.dexterity.get(entity).cloned()
+    }
+
+    pub fn intelligence(&self, entity: Entity) -> Option<i32> {
+        self.components.intelligence.get(entity).cloned()
     }
 
 
@@ -842,4 +870,3 @@ pub struct CharacterData {
     entity_data: EntityData,
     inventory_entity_data: Vec<Option<EntityData>>,
 }
-

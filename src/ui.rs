@@ -23,6 +23,8 @@ pub struct UiData<'a> {
     pub messages: &'a [LogMessage],
     pub name: Option<&'static str>,
     pub examine_cell: Option<ExamineCell>,
+    pub stats_data: StatsData,
+    pub dungeon_level: u32,
 }
 
 
@@ -30,6 +32,21 @@ pub struct UiData<'a> {
 pub struct UiView {
     health_view: HealthView,
     messages_view: MessagesView,
+    stats_view: StatsView,
+    dungeon_level_view: DungeonLevelView,
+}
+
+fn center_health_width<T: Clone>(view: impl View<T>, height: u32) -> impl View<T> {
+    BoundView {
+        size: Size::new(HEALTH_WIDTH, height),
+        view: AlignView {
+            alignment: Alignment {
+                x: AlignmentX::Centre,
+                y: AlignmentY::Bottom,
+            },
+            view,
+        },
+    }
 }
 
 impl<'a> View<UiData<'a>> for UiView {
@@ -41,7 +58,18 @@ impl<'a> View<UiData<'a>> for UiView {
     ) {
         self.health_view
             .view(data.player_hit_points, context, frame);
-        let message_log_offset = Coord::new(HEALTH_WIDTH as i32 + 1, 0);
+        self.stats_view
+            .view(
+                &data.stats_data,
+                context.add_offset(Coord::new(HEALTH_WIDTH as i32 + 1, 0)),
+                frame,
+            );
+        center_health_width(&mut self.dungeon_level_view, 1).view(
+            data.dungeon_level,
+            context.add_offset(Coord::new(0, 1)),
+            frame,
+        );
+        let message_log_offset = Coord::new(HEALTH_WIDTH as i32 + 1, 1);
         self.messages_view
             .view(data.messages, context.add_offset(message_log_offset), frame);
 
@@ -55,25 +83,18 @@ impl<'a> View<UiData<'a>> for UiView {
                     ),
                 },
             }
-            .view(name, context.add_offset(Coord::new(0, 1)), frame);
+            .view(name, context.add_offset(Coord::new(0, 2)), frame);
         }
         if let Some(examine_cell) = data.examine_cell {
-            BoundView {
-                size: Size::new(HEALTH_WIDTH, 2),
-                view: AlignView {
-                    alignment: Alignment {
-                        x: AlignmentX::Centre,
-                        y: AlignmentY::Bottom,
-                    },
-                    view: StringView::new(
-                        Style::new().with_foreground(Rgb24::new_grey(187)),
-                        wrap::Word::new(),
-                    ),
-                },
-            }
-            .view(
+            center_health_width(
+                StringView::new(
+                    Style::new().with_foreground(Rgb24::new_grey(187)),
+                    wrap::Word::new(),
+                ),
+                2,
+            ).view(
                 examine_cell_str(examine_cell),
-                context.add_offset(Coord::new(0, 2)),
+                context.add_offset(Coord::new(0, 3)),
                 frame,
             );
         }
@@ -260,5 +281,56 @@ fn examine_cell_str(examine_cell: ExamineCell) -> &'static str {
         ExamineCell::Npc(npc_type) | ExamineCell::NpcCorpse(npc_type) => npc_type.name(),
         ExamineCell::Item(item_type) => item_type.name(),
         ExamineCell::Player => "yourself",
+    }
+}
+
+#[derive(Default)]
+struct StatsView {
+    buf: String,
+}
+
+pub struct StatsData {
+    pub strength: i32,
+    pub dexterity: i32,
+    pub intelligence: i32,
+}
+
+impl<'a> View<&'a StatsData> for StatsView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        data: &'a StatsData,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        use std::fmt::Write;
+        self.buf.clear();
+        write!(
+            &mut self.buf,
+            "str: {} dex: {} int: {}",
+            data.strength, data.dexterity, data.intelligence
+        ).unwrap();
+        StringViewSingleLine::new(Style::new().with_foreground(Rgb24::new_grey(187)))
+            .view(&self.buf, context, frame);
+    }
+}
+
+
+#[derive(Default)]
+struct DungeonLevelView {
+    buf: String,
+}
+
+impl View<u32> for DungeonLevelView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        dungeon_level: u32,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        use std::fmt::Write;
+        self.buf.clear();
+        write!(&mut self.buf, "Level: {}", dungeon_level).unwrap();
+        StringViewSingleLine::new(Style::new().with_foreground(Rgb24::new_grey(187)))
+            .view(&self.buf, context, frame);
     }
 }

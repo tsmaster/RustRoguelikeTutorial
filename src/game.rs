@@ -30,6 +30,7 @@ pub struct GameState {
     behavior_context: BehaviorContext,
     message_log: Vec<LogMessage>,
     rng: Isaac64Rng,
+    dungeon_level: u32,
 }
 
 impl GameState {
@@ -48,6 +49,7 @@ impl GameState {
         let shadowcast_context = shadowcast::Context::default();
         let visibility_grid = VisibilityGrid::new(screen_size);
         let behavior_context = BehaviorContext::new(screen_size);
+        let dungeon_level = 1;
         let mut game_state = Self {
             world,
             player_entity,
@@ -57,6 +59,7 @@ impl GameState {
             behavior_context,
             message_log: Vec::new(),
             rng,
+            dungeon_level,
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
@@ -161,6 +164,7 @@ impl GameState {
         let player_data = self.world.remove_character(self.player_entity);
         self.world.clear();
         self.visibility_grid.clear();
+        self.dungeon_level += 1;
 
         let Populate {
             player_entity,
@@ -174,10 +178,32 @@ impl GameState {
         self.ai_state = ai_state;
     }
 
+    pub fn player_strength(&self) -> i32 {
+        self.world
+            .strength(self.player_entity)
+            .expect("player missing strength")
+    }
+
+    pub fn player_dexterity(&self) -> i32 {
+        self.world
+            .dexterity(self.player_entity)
+            .expect("player missing strength")
+    }
+
+    pub fn player_intelligence(&self) -> i32 {
+        self.world
+            .intelligence(self.player_entity)
+            .expect("player missing strength")
+    }
+
     pub fn player_inventory(&self) -> &Inventory {
         self.world
             .inventory(self.player_entity)
             .expect("player has no inventory")
+    }
+
+    pub fn dungeon_level(&self) -> u32 {
+        self.dungeon_level
     }
 
     pub fn item_type(&self, entity: Entity) -> Option<ItemType> {
