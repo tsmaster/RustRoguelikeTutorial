@@ -201,5 +201,9 @@ fn make_item_probability_distribution(level: u32) -> Vec<(ItemType, u32)> {
              _ => 5,
          },
         ),
+        (Sword, 1000),
+        (Staff, 1000),
+        (Armor, 1000),
+        (Robe, 1000),
     ]
 }

@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::behavior::{Agent, BehaviorContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{HitPoints, Inventory, ItemType, ItemUsage,
-                   Location, NpcType, Populate, ProjectileType, Tile,
-                   World};
+use crate::world::{EquippedInventoryIndices, HitPoints, Inventory,
+                   ItemType, ItemUsage, Location, NpcType, Populate,
+                   ProjectileType, Tile, World};
 
 
 pub struct EntityToRender {
@@ -289,6 +289,10 @@ impl GameState {
             CellVisibility::Currently => self.world.examine_cell(coord),
             _ => None,
         }
+    }
+
+    pub fn player_equipped_inventory_indices(&self) -> EquippedInventoryIndices {
+        self.world.equipped_inventory_indices(self.player_entity)
     }
 }
 

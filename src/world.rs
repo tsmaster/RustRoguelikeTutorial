@@ -41,6 +41,8 @@ entity_table::declare_entity_module! {
         strength: i32,
         dexterity: i32,
         intelligence: i32,
+        equipment_worn_inventory_index: usize,
+        equipment_held_inventory_index: usize,
     }
 }
 
@@ -528,7 +530,19 @@ impl World {
                 message_log.push(LogMessage::PlayerHeals);
                 ItemUsage::Immediate
             }
-            ItemType::FireballScroll | ItemType::ConfusionScroll => ItemUsage::Aim
+            ItemType::FireballScroll | ItemType::ConfusionScroll => ItemUsage::Aim,
+            ItemType::Sword | ItemType::Staff => {
+                self.components
+                    .equipment_held_inventory_index
+                    .insert(character, inventory_index);
+                ItemUsage::Immediate
+            }
+            ItemType::Armor | ItemType::Robe => {
+                self.components
+                    .equipment_worn_inventory_index
+                    .insert(character, inventory_index);
+                ItemUsage::Immediate
+            }
         };
         Ok(usage)
     }
@@ -552,7 +566,11 @@ impl World {
         let item_entity = inventory.remove(inventory_index).unwrap();
         let &item_type = self.components.item.get(item_entity).unwrap();
         match item_type {
-            ItemType::HealthPotion => panic!("invalid item for aim"),
+            ItemType::HealthPotion
+                | ItemType::Sword
+                | ItemType::Staff
+                | ItemType::Armor
+                | ItemType::Robe => panic!("invalid item for aim"),
             ItemType::FireballScroll => {
                 let fireball = ProjectileType::Fireball {
                     damage: (*self.components.intelligence.get(character).unwrap()).max(0) as u32,
@@ -585,6 +603,28 @@ impl World {
         if self.spatial_table.layers_at_checked(coord).object.is_some() {
             message_log.push(LogMessage::NoSpaceToDropItem);
             return Err(());
+        }
+        if self
+            .components
+            .equipment_held_inventory_index
+            .get(character)
+            .cloned()
+            == Some(inventory_index)
+        {
+            self.components
+                .equipment_held_inventory_index
+                .remove(character);
+        }
+        if self
+            .components
+            .equipment_worn_inventory_index
+            .get(character)
+            .cloned()
+            == Some(inventory_index)
+        {
+            self.components
+                .equipment_worn_inventory_index
+                .remove(character);
         }
         let inventory = self
             .components
@@ -807,6 +847,20 @@ impl World {
     pub fn has_projectiles(&self) -> bool {
         !self.components.trajectory.is_empty()
     }
+
+    pub fn equipped_inventory_indices(&self, entity: Entity) -> EquippedInventoryIndices {
+        let held = self
+            .components
+            .equipment_held_inventory_index
+            .get(entity)
+            .cloned();
+        let worn = self
+            .components
+            .equipment_worn_inventory_index
+            .get(entity)
+            .cloned();
+        EquippedInventoryIndices { held, worn }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -846,6 +900,10 @@ pub enum ItemType {
     HealthPotion,
     FireballScroll,
     ConfusionScroll,
+    Sword,
+    Staff,
+    Armor,
+    Robe
 }
 
 impl ItemType {
@@ -854,6 +912,10 @@ impl ItemType {
             Self::HealthPotion => "health potion",
             Self::FireballScroll => "fireball scroll",
             Self::ConfusionScroll => "confusion scroll",
+            Self::Sword => "sword",
+            Self::Staff => "staff",
+            Self::Armor => "armor",
+            Self::Robe => "robe",
         }
     }
 }
@@ -936,4 +998,10 @@ enum BumpAttackOutcome {
     Hit,
     Dodge,
     Kill,
+}
+
+
+pub struct EquippedInventoryIndices {
+    pub worn: Option<usize>,
+    pub held: Option<usize>,
 }

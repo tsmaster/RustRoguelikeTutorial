@@ -46,6 +46,10 @@ pub mod colors {
     pub const HEALTH_POTION: Rgb24 = Rgb24::new(255, 0, 255);
     pub const FIREBALL_SCROLL: Rgb24 = Rgb24::new(255, 127, 0);
     pub const CONFUSION_SCROLL: Rgb24 = Rgb24::new(187, 0, 255);
+    pub const SWORD: Rgb24 = Rgb24::new(187, 187, 187);
+    pub const STAFF: Rgb24 = Rgb24::new(187, 127, 187);
+    pub const ARMOR: Rgb24 = Rgb24::new(127, 127, 127);
+    pub const ROBE: Rgb24 = Rgb24::new(127, 127, 187);
 
     pub fn npc_color(npc_type: NpcType) -> Rgb24 {
         match npc_type {
@@ -59,6 +63,10 @@ pub mod colors {
             ItemType::HealthPotion => HEALTH_POTION,
             ItemType::FireballScroll => FIREBALL_SCROLL,
             ItemType::ConfusionScroll => CONFUSION_SCROLL,
+            ItemType::Sword => SWORD,
+            ItemType::Staff => STAFF,
+            ItemType::Armor => ARMOR,
+            ItemType::Robe => ROBE,
         }
     }
 
@@ -81,7 +89,7 @@ struct AppData {
     game_area_size: Size,
     rng_seed: u64,
     level_up_menu: MenuInstanceChooseOrEscape<LevelUp>,
-    
+
 }
 
 impl AppData {
@@ -406,6 +414,22 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_bold(true)
             .with_foreground(Rgb24::new_grey(255))
             .with_background(Rgb24::new(0, 0, 63)),
+        Tile::Item(ItemType::Sword) => ViewCell::new()
+            .with_bold(true)
+            .with_character('/')
+            .with_foreground(colors::SWORD),
+        Tile::Item(ItemType::Staff) => ViewCell::new()
+            .with_bold(true)
+            .with_character('\\')
+            .with_foreground(colors::STAFF),
+        Tile::Item(ItemType::Armor) => ViewCell::new()
+            .with_bold(true)
+            .with_character(']')
+            .with_foreground(colors::ARMOR),
+        Tile::Item(ItemType::Robe) => ViewCell::new()
+            .with_bold(true)
+            .with_character('}')
+            .with_foreground(colors::ROBE),
     }
 }
 
@@ -483,6 +507,7 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
     ) {
         let player_inventory_slots = data.game_state.player_inventory().slots();
         self.mouse_tracker.new_frame(context.offset);
+        let equipped_indices = data.game_state.player_equipped_inventory_indices();
         for ((i, entry, maybe_selected), &slot) in data
             .inventory_slot_menu
             .menu_instance()
@@ -514,6 +539,13 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
                 )
             };
             let prefix = format!("{} {}) ", selected_prefix, entry.key);
+            let equipment_suffix = if equipped_indices.held == Some(i) {
+                " (held)"
+            } else if equipped_indices.worn == Some(i) {
+                " (worn)"
+            } else {
+                ""
+            };
             let text = &[
                 RichTextPart {
                     text: &prefix,
@@ -522,6 +554,10 @@ impl<'a> View<&'a AppData> for InventorySlotMenuView {
                 RichTextPart {
                     text: name,
                     style: name_style,
+                },
+                RichTextPart {
+                    text: equipment_suffix,
+                    style: name_style
                 },
             ];
             let size = RichTextViewSingleLine::new().view_size(
