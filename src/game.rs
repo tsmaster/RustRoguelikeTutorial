@@ -42,14 +42,14 @@ impl GameState {
         let mut world = World::new(screen_size);
         let mut rng = Isaac64Rng::seed_from_u64(rng_seed);
         println!("RNG: {:?}", rng);
+        let dungeon_level = 1;
         let Populate {
             player_entity,
             ai_state,
-        } = world.populate(&mut rng);
+        } = world.populate(dungeon_level, &mut rng);
         let shadowcast_context = shadowcast::Context::default();
         let visibility_grid = VisibilityGrid::new(screen_size);
         let behavior_context = BehaviorContext::new(screen_size);
-        let dungeon_level = 1;
         let mut game_state = Self {
             world,
             player_entity,
@@ -165,7 +165,7 @@ impl GameState {
         let Populate {
             player_entity,
             ai_state,
-        } = self.world.populate(&mut self.rng);
+        } = self.world.populate(self.dungeon_level, &mut self.rng);
 
         self.world.replace_character(player_entity, player_data);
         self.player_entity = player_entity;
