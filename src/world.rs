@@ -535,12 +535,14 @@ impl World {
                 self.components
                     .equipment_held_inventory_index
                     .insert(character, inventory_index);
+                message_log.push(LogMessage::PlayerEquips(item_type));
                 ItemUsage::Immediate
             }
             ItemType::Armor | ItemType::Robe => {
                 self.components
                     .equipment_worn_inventory_index
                     .insert(character, inventory_index);
+                message_log.push(LogMessage::PlayerEquips(item_type));
                 ItemUsage::Immediate
             }
         };
@@ -888,7 +890,7 @@ impl World {
             })
             .unwrap_or(0)
     }
-    
+
     fn defense_modifier(&self, entity: Entity) -> i32 {
         self.components
             .equipment_worn_inventory_index
@@ -939,7 +941,7 @@ impl World {
             .unwrap_or(0)
             + self.magic_modifier(entity)
     }
-    
+
 }
 
 
